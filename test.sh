@@ -4,4 +4,4 @@ cd build
 cmake ..
 make
 cd bin
-./prt
+./parallel_raytrace > out.dump

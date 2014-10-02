@@ -209,15 +209,94 @@ void test_value (global Impulse * impulse, float f)
     *impulse = (Impulse) {(float3) (f), f};
 }
 
-kernel void raytrace (global float3 * directions,
-                      float3 position,
-                      global Triangle * triangles,
-                      unsigned long numtriangles,
-                      global float3 * vertices,
-                      global Sphere * sphere,
-                      global Surface * surfaces,
-                      global Impulse * impulses,
-                      unsigned long outputOffset)
+kernel void test 
+(   global float3 * directions
+,   float3 position
+,   global Triangle * triangles
+,   unsigned long numtriangles
+,   global float3 * vertices
+,   global Sphere * sphere
+,   global Surface * surfaces
+,   global Reflection * reflections
+,   unsigned long outputOffset
+)
+{
+    size_t i = get_global_id (0);
+    
+    Ray ray = {position, directions [i]};
+    float distance = 0;
+    float3 volume = 1;
+    unsigned long index = 0;
+
+    while (anyAbove (volume, THRESHOLD) && index != outputOffset)
+    {
+        Intersection closest = ray_intersection (&ray,
+                                                 sphere,
+                                                 triangles,
+                                                 numtriangles,
+                                                 vertices);
+        
+        if (closest.primitive == NULL)
+        {
+            break;
+        }
+        
+        if (closest.primitive == sphere)
+        {
+            break;
+        }
+        
+        float3 intersection = ray.position + ray.direction * closest.distance;
+
+        float newDist = distance + closest.distance;
+
+        global Triangle * triangle = (global Triangle *) closest.primitive;
+        float3 newVol = -volume * surfaces [triangle->surface].specular;
+
+        Reflection reflection = {
+            triangle->surface,
+            intersection,
+            triangle_normal (triangle, vertices),
+            newVol,
+            newDist
+        };
+
+        float3 direction = normalize (sphere->origin - reflection.position);
+        
+        Ray toSource = {intersection, direction};
+        
+        Intersection inter = ray_intersection (&toSource,
+                                               sphere,
+                                               triangles,
+                                               numtriangles,
+                                               vertices);
+        
+        if (inter.primitive == sphere)
+        {
+            reflections [i * outputOffset + index] = reflection;
+
+            ++index;
+        }
+
+        Ray newRay = triangle_reflectAt (triangle, vertices, &ray, intersection);
+
+        ray = newRay;
+        distance = newDist;
+        volume = newVol;
+    }
+}
+
+kernel void raytrace 
+(   global float3 * directions
+,   float3 position
+,   global Triangle * triangles
+,   unsigned long numtriangles
+,   global float3 * vertices
+,   global Sphere * sphere
+,   global Surface * surfaces
+,   global Impulse * impulses
+,   unsigned long outputOffset
+)
 {
     size_t i = get_global_id (0);
     
