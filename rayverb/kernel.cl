@@ -30,7 +30,6 @@ typedef struct {
 } Triangle;
 
 typedef struct {
-    unsigned long surface;
     float3 origin;
     float radius;
 } Sphere;
