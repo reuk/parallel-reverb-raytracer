@@ -1,0 +1,10 @@
+#
+## Alias OBJ Material File
+# Exported from SketchUp, (c) 2000-2012 Trimble Navigation Limited
+
+newmtl FrontColor
+Ka 0.000000 0.000000 0.000000
+#Kd 0.950000 0.850000 0.750000
+#Ks 0.950000 0.850000 0.750000
+Kd 0.750000 0.850000 0.950000
+Ks 0.750000 0.850000 0.950000

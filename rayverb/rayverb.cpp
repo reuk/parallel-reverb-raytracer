@@ -14,8 +14,9 @@
 #include <numeric>
 #include <fstream>
 #include <streambuf>
+#include <iostream>
 
-//#define USE_OBJECT_MATERIALS
+#define USE_OBJECT_MATERIALS
 
 using namespace std;
 
@@ -23,7 +24,6 @@ cl_float3 fromAIVec (const aiVector3D & v)
 {
     return (cl_float3) {v.x, v.y, v.z, 0};
 }
-
 
 struct LatestImpulse: binary_function <Impulse, Impulse, bool>
 {
@@ -180,15 +180,13 @@ vector <vector <float>> process (vector <vector <cl_float3>> & data, float sr) t
 
 Scene::Scene 
 (   cl::Context & cl_context
-,   unsigned long nrays
 ,   unsigned long nreflections
 ,   vector <cl_float3> & directions
 ,   vector <Triangle> & triangles
 ,   vector <cl_float3> & vertices
 ,   vector <Surface> & surfaces
-,   unsigned long nsources
 )
-:   nrays (nrays)
+:   nrays (directions.size())
 ,   nreflections (nreflections)
 ,   ntriangles (triangles.size())
 ,   cl_context (cl_context)
@@ -196,129 +194,200 @@ Scene::Scene
 ,   cl_triangles  (cl_context, begin (triangles),  end (triangles),  false)
 ,   cl_vertices   (cl_context, begin (vertices),   end (vertices),   false)
 ,   cl_surfaces   (cl_context, begin (surfaces),   end (surfaces),   false)
-,   cl_spheres    (cl_context, CL_MEM_READ_WRITE, nsources * sizeof (Sphere))
-,   cl_impulses   (cl_context, CL_MEM_READ_WRITE, nrays * nreflections * sizeof (Impulse))
-,   cl_attenuated (cl_context, CL_MEM_READ_WRITE, nrays * nreflections * sizeof (Impulse))
+,   cl_sphere     (cl_context, CL_MEM_READ_WRITE, sizeof (Sphere))
+,   cl_impulses   (cl_context, CL_MEM_READ_WRITE, directions.size() * nreflections * sizeof (Impulse))
+,   cl_attenuated (cl_context, CL_MEM_READ_WRITE, directions.size() * nreflections * sizeof (Impulse))
 {
     ifstream cl_source_file ("kernel.cl");
     string cl_source_string 
     (   (istreambuf_iterator <char> (cl_source_file))
     ,   istreambuf_iterator <char> ()
     );
-    
+
     cl_program = cl::Program (cl_context, cl_source_string, true);
+
+    vector <cl::Device> device = cl_context.getInfo <CL_CONTEXT_DEVICES>();
+
+    cl::Device used_device = device.back();
+    
+    /*
+    cerr 
+    <<  cl_program.getBuildInfo <CL_PROGRAM_BUILD_LOG> (used_device) 
+    << endl;
+    */
+
+    queue = cl::CommandQueue (cl_context, used_device);
 }
+
+struct Scene::SceneData
+{
+public:
+    SceneData (const std::string & objpath)
+    {
+        populate (objpath);
+    }
+
+    void populate (const aiScene * scene)
+    {
+        if (! scene)
+            throw runtime_error ("Failed to load object file.");
+        
+        for (unsigned long i = 0; i != scene->mNumMeshes; ++i)
+        {
+            const aiMesh * mesh = scene->mMeshes [i];
+            
+            vector <cl_float3> meshVertices (mesh->mNumVertices);
+            
+            for (unsigned long j = 0; j != mesh->mNumVertices; ++j)
+            {
+                meshVertices [j] = fromAIVec (mesh->mVertices [j]);
+            }
+            
+#ifdef USE_OBJECT_MATERIALS
+            const aiMaterial * material = scene->mMaterials 
+            [   mesh->mMaterialIndex
+            ];
+
+            aiColor3D diffuse (0.9, 0.8, 0.7);
+            material->Get(AI_MATKEY_COLOR_DIFFUSE, diffuse);
+            
+            aiColor3D specular (0.9, 0.8, 0.7);
+            material->Get(AI_MATKEY_COLOR_SPECULAR, specular);
+            
+            Surface surface = {
+                (cl_float3) {specular.r, specular.g, specular.b, 0},
+                (cl_float3) {diffuse.r, diffuse.g, diffuse.b, 0}
+            };
+#else
+            Surface surface = {
+                (cl_float3) {0.95, 0.85, 0.75, 0},
+                (cl_float3) {0.95, 0.85, 0.75, 0}
+            };
+#endif
+            
+            surfaces.push_back (surface);
+            
+            vector <Triangle> meshTriangles (mesh->mNumFaces);
+            
+            for (unsigned long j = 0; j != mesh->mNumFaces; ++j)
+            {
+                const aiFace face = mesh->mFaces [j];
+                
+                meshTriangles [j] = (Triangle) {
+                    surfaces.size() - 1,
+                    vertices.size() + face.mIndices [0],
+                    vertices.size() + face.mIndices [1],
+                    vertices.size() + face.mIndices [2]
+                };
+            }
+                
+            vertices.insert 
+            (   vertices.end()
+            ,   meshVertices.begin()
+            ,   meshVertices.end()
+            );
+
+            triangles.insert 
+            (   triangles.end()
+            ,   meshTriangles.begin()
+            ,   meshTriangles.end()
+            );
+        }
+    }
+
+    void populate (const std::string & objpath)
+    {
+        Assimp::Importer importer;
+        populate 
+        (   importer.ReadFile 
+            (   objpath
+            ,   (   aiProcess_Triangulate 
+                |   aiProcess_GenSmoothNormals 
+                |   aiProcess_FlipUVs
+                )
+            )
+        );
+    }
+
+    bool validSurfaces()
+    {
+        for (const Surface & s : surfaces)
+        {
+            for (int i = 0; i != 3; ++i)
+            {
+                if 
+                (   s.specular.s [i] < 0 || 1 < s.specular.s [i]
+                ||  s.diffuse.s [i] < 0 || 1 < s.diffuse.s [i]
+                )
+                    return false;
+            }
+        }
+
+        return true;
+    }
+
+    bool validTriangles()
+    {
+        for (const Triangle & t : triangles)
+        {
+            if 
+            (   surfaces.size() <= t.surface
+            ||  vertices.size() <= t.v0
+            ||  vertices.size() <= t.v1
+            ||  vertices.size() <= t.v2
+            )
+                return false;
+        }
+
+        return true;
+    }
+
+    bool valid()
+    {
+        if (triangles.empty() || vertices.empty() || surfaces.empty())
+            return false;
+
+        return validSurfaces() && validTriangles();
+    }
+
+    std::vector <Triangle> triangles;
+    std::vector <cl_float3> vertices;
+    std::vector <Surface> surfaces;
+};
 
 Scene::Scene
 (   cl::Context & cl_context
-,   unsigned long nrays
 ,   unsigned long nreflections
 ,   std::vector <cl_float3> & directions
 ,   SceneData sceneData
-,   unsigned long nsources 
 )
 :   Scene
 (   cl_context
-,   nrays
 ,   nreflections
 ,   directions
 ,   sceneData.triangles
 ,   sceneData.vertices
 ,   sceneData.surfaces
-,   nsources
 )
 {
-
-}
-
-Scene::SceneData::SceneData (const std::string & objpath)
-{
-    Assimp::Importer importer;
-    const aiScene * scene = importer.ReadFile 
-    (   objpath
-    ,   aiProcess_Triangulate | aiProcess_GenSmoothNormals | aiProcess_FlipUVs
-    );
-    
-    if (! scene)
-        throw runtime_error ("Failed to load object file.");
-    
-    for (unsigned long i = 0; i != scene->mNumMeshes; ++i)
-    {
-        const aiMesh * mesh = scene->mMeshes [i];
-        
-        vector <cl_float3> meshVertices (mesh->mNumVertices);
-        
-        for (unsigned long j = 0; j != mesh->mNumVertices; ++j)
-        {
-            meshVertices [j] = fromAIVec (mesh->mVertices [j]);
-        }
-        
-#ifdef USE_OBJECT_MATERIALS
-        const aiMaterial * material = scene->mMaterials [mesh->mMaterialIndex];
-
-        aiColor3D diffuse (0.9, 0.8, 0.7);
-        material->Get(AI_MATKEY_COLOR_DIFFUSE, diffuse);
-        
-        aiColor3D specular (0.9, 0.8, 0.7);
-        material->Get(AI_MATKEY_COLOR_SPECULAR, specular);
-        
-        Surface surface = {
-            (cl_float3) {specular.r, specular.g, specular.b, 0},
-            (cl_float3) {diffuse.r, diffuse.g, diffuse.b, 0}
-        };
-#else
-        Surface surface = {
-            (cl_float3) {0.95, 0.8, 0.75, 0},
-            (cl_float3) {0.95, 0.8, 0.75, 0}
-        };
-#endif
-        
-        surfaces.push_back (surface);
-        
-        vector <Triangle> meshTriangles (mesh->mNumFaces);
-        
-        for (unsigned long j = 0; j != mesh->mNumFaces; ++j)
-        {
-            const aiFace face = mesh->mFaces [j];
-            
-            meshTriangles [j] = (Triangle) {
-                surfaces.size() - 1,
-                vertices.size() + face.mIndices [0],
-                vertices.size() + face.mIndices [1],
-                vertices.size() + face.mIndices [2]
-            };
-        }
-            
-        vertices.insert (vertices.end(), meshVertices.begin(), meshVertices.end());
-        triangles.insert (triangles.end(), meshTriangles.begin(), meshTriangles.end());
-    }
 }
 
 Scene::Scene
 (   cl::Context & cl_context
-,   unsigned long nrays
 ,   unsigned long nreflections
 ,   std::vector <cl_float3> & directions
 ,   const std::string & objpath
-,   unsigned long nsources
 )
 :   Scene
 (   cl_context
-,   nrays   
 ,   nreflections
 ,   directions
 ,   SceneData (objpath)
-,   nsources
 )
 {
-
 }
 
-vector <vector <Impulse>> Scene::trace 
-(   const cl_float3 & micpos
-,   vector <Sphere> & spheres
-,   const vector <Speaker> & speakers
-) const
+void Scene::trace (const cl_float3 & micpos, Sphere source)
 {
     auto raytrace = cl::make_kernel 
     <   cl::Buffer
@@ -331,18 +400,15 @@ vector <vector <Impulse>> Scene::trace
     ,   cl::Buffer
     ,   unsigned long
     > (cl_program, "raytrace");
-    
-    auto attenuate = cl::make_kernel 
-    <   cl::Buffer
-    ,   cl::Buffer
-    ,   unsigned long
-    ,   cl::Buffer
-    ,   Speaker
-    > (cl_program, "attenuate");
 
-    vector <cl::Device> device = cl_context.getInfo <CL_CONTEXT_DEVICES>();
-    cl::Device used_device = device.back();
-    cl::CommandQueue queue (cl_context, used_device);
+    Sphere * sp = &source;
+
+    cl::copy
+    (   queue
+    ,   sp
+    ,   sp + 1
+    ,   cl_sphere
+    );
 
     raytrace 
     (   cl::EnqueueArgs (queue, cl::NDRange (nrays))
@@ -351,35 +417,62 @@ vector <vector <Impulse>> Scene::trace
     ,   cl_triangles
     ,   ntriangles
     ,   cl_vertices
-    ,   cl_spheres
+    ,   cl_sphere
     ,   cl_surfaces
     ,   cl_impulses
     ,   nreflections
     );
+}
 
-    vector <vector <Impulse>> attenuated
-    (   speakers.size()
-    ,   vector <Impulse> (nreflections * nrays)
+vector <Impulse> Scene::attenuate (const Speaker & speaker)
+{
+    auto attenuate = cl::make_kernel 
+    <   cl::Buffer
+    ,   cl::Buffer
+    ,   unsigned long
+    ,   cl::Buffer
+    ,   Speaker
+    > (cl_program, "attenuate");
+
+    attenuate 
+    (   cl::EnqueueArgs (queue, cl::NDRange (nrays))
+    ,   cl_impulses
+    ,   cl_attenuated
+    ,   nreflections
+    ,   cl_directions
+    ,   speaker
     );
 
-    for (int i = 0; i != speakers.size(); ++i)
-    {
-        attenuate 
-        (   cl::EnqueueArgs (queue, cl::NDRange (nrays))
-        ,   cl_impulses
-        ,   cl_attenuated
-        ,   nreflections
-        ,   cl_directions
-        ,   speakers [i]
-        );
+    vector <Impulse> attenuated (nreflections * nrays);
 
-        cl::copy 
-        (   queue
-        ,   cl_attenuated
-        ,   attenuated [i].begin()
-        ,   attenuated [i].end()
-        );
-    }
+    cl::copy 
+    (   queue
+    ,   cl_attenuated
+    ,   attenuated.begin()
+    ,   attenuated.end()
+    );
 
     return attenuated;
+}
+
+vector <vector <Impulse>> Scene::attenuate (const vector <Speaker> & speakers)
+{
+    vector <vector <Impulse>> attenuated;
+    for (const Speaker & s : speakers)
+        attenuated.push_back (attenuate (s));
+    return attenuated;
+}
+
+cl::Context getContext()
+{
+    vector <cl::Platform> platform;
+    cl::Platform::get (&platform);
+
+    cl_context_properties cps [3] = {
+        CL_CONTEXT_PLATFORM,
+        (cl_context_properties) (platform [0]) (),
+        0
+    };
+    
+    return cl::Context (CL_DEVICE_TYPE_GPU, cps);
 }

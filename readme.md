@@ -7,22 +7,48 @@ lighting techniques. Uses OpenCL for IMMENSE SPEED.
 to do
 -----
 
-* Integrate with the realtime convolution.
+* Integrate with realtime convolution.
     * Try to make realtime(ish) maybe
+    * The realtime convolution still needs threading somehow
 
 * Use hrtf
     * Write a speedy hrtf calculator
         * Probably multiple parallel discrete convolutions?
 
 * Add multiple-source processing
+    * Can probably do this by just running the process several times
+    * Keep all the geometry loaded, to reduce slowdown
 
 * Consider faster intersection-calcluation algorithms
+    * Might actually end up slower due to increased divergence
+
+* Add a proper testing framework
+    * Aim for coverage of all the library-visible functions first
+    * Then for coverage of internal functions if time
+    * Add a sample .obj to the project for testing/loading purposes
+    * Add a function to the Scene class to facilitate validation of scene
+      data
+
+* Throw an error if an object is invalid / contains invalid materials.
 
 done
 ----
 
 * Check that the intersection calculations are actually working properly.
     * Export some data to visualise.
+
+* Modify the .obj so that it has proper materials.
+    * The .obj has an accompanying .mtl which contains material defs
+    * You can modify this by hand to use the correct materials
+    * Just make sure you have MATCHING materials where you need them when 
+      building the .obj
+    * Then modify them yourself after exporting
+
+* Check how assimp deals with unit testing on obj files - relative paths?
+    * Then do the same thing obviously
+    * For the time being, there's just a .obj file bundled in the main dir
+    * This is copied to the runtime output dir, and preprocessor macros
+      are used to direct the tests and proof-of-concept app to the correct loc.
 
 to think about
 --------------

@@ -68,39 +68,42 @@ std::vector <std::vector <float>> process
 ,   float samplerate
 ) throw();
 
+cl::Context getContext();
+
 class Scene
 {
 public:
     Scene 
     (   cl::Context & cl_context
-    ,   unsigned long nrays
     ,   unsigned long nreflections
     ,   std::vector <cl_float3> & directions
     ,   std::vector <Triangle> & triangles
     ,   std::vector <cl_float3> & vertices
     ,   std::vector <Surface> & surfaces
-    ,   unsigned long nsources = 1
     );
 
     Scene
     (   cl::Context & cl_context
-    ,   unsigned long rays
     ,   unsigned long nreflections
     ,   std::vector <cl_float3> & directions
     ,   const std::string & objpath
-    ,   unsigned long nsources = 1
     );
 
-    std::vector <std::vector <Impulse>> trace 
+    void trace
     (   const cl_float3 & micpos
-    ,   std::vector <Sphere> & sources
-    ,   const std::vector <Speaker> & speakers
-    ) const;
+    ,   Sphere source
+    );
+
+    std::vector <Impulse> attenuate (const Speaker & speaker);
+
+    std::vector <std::vector <Impulse>>  attenuate 
+    (   const std::vector <Speaker> & speakers
+    );
 
 private:
-    unsigned long nrays;
-    unsigned long nreflections;
-    unsigned long ntriangles;
+    const unsigned long nrays;
+    const unsigned long nreflections;
+    const unsigned long ntriangles;
 
     cl::Context & cl_context;
 
@@ -108,29 +111,22 @@ private:
     cl::Buffer cl_triangles;
     cl::Buffer cl_vertices;
     cl::Buffer cl_surfaces;
-    cl::Buffer cl_spheres;
+
+    cl::Buffer cl_sphere;
 
     cl::Buffer cl_impulses;
     cl::Buffer cl_attenuated;
 
     cl::Program cl_program;
 
-    struct SceneData
-    {
-    public:
-        SceneData (const std::string & objpath);
+    cl::CommandQueue queue;
 
-        std::vector <Triangle> triangles;
-        std::vector <cl_float3> vertices;
-        std::vector <Surface> surfaces;
-    };
+    struct SceneData;
 
     Scene
     (   cl::Context & cl_context
-    ,   unsigned long nrays
     ,   unsigned long nreflections
     ,   std::vector <cl_float3> & directions
     ,   SceneData sceneData
-    ,   unsigned long nsources = 1
     );
 };

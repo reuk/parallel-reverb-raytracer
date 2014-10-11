@@ -355,14 +355,28 @@ kernel void raytrace
         
         if (inter.primitive == sphere)
         {
-            const float time = SECONDS_PER_METER * (reflection.distance + inter.distance);
-            const float3 volume = reflection.volume * surfaces [reflection.surface].diffuse * dot (reflection.normal, direction);
+            const float time = 
+            (   SECONDS_PER_METER 
+            *   (   reflection.distance 
+                +   inter.distance
+                )
+            );
+            const float3 volume = 
+            (   reflection.volume 
+            *   surfaces [reflection.surface].diffuse 
+            *   dot (reflection.normal, direction)
+            );
             impulses [i * outputOffset + index] = (Impulse) {volume, time};
 
             ++index;
         }
 
-        Ray newRay = triangle_reflectAt (triangle, vertices, &ray, intersection);
+        Ray newRay = triangle_reflectAt 
+        (   triangle
+        ,   vertices
+        ,   &ray
+        ,   intersection
+        );
 
         ray = newRay;
         distance = newDist;

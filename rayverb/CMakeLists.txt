@@ -13,6 +13,14 @@ set(sources rayverb.cpp)
 
 add_library(${name} ${sources})
 
+find_library(opencl_library OpenCL)
+mark_as_advanced(opencl_library)
+set(frameworks ${opencl_library})
+
+set(libraries assimp ${frameworks})
+
+target_link_libraries(${name} ${libraries})
+
 file(COPY
     ${CMAKE_CURRENT_SOURCE_DIR}/kernel.cl
     DESTINATION ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
