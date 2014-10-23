@@ -48,14 +48,14 @@ vector <cl_float3> flattenImpulses
 ,   float samplerate
 ) throw()
 {
-    const float MAX_TIME = max_element (impulse.begin(), impulse.end(), LatestImpulse())->time;
+    const float MAX_TIME = max_element (begin (impulse), end (impulse), LatestImpulse())->time;
     const unsigned long MAX_SAMPLE = round (MAX_TIME * samplerate);
     
     vector <cl_float3> flattened (MAX_SAMPLE, (cl_float3) {0});
 
     for_each 
-    (   impulse.begin()
-    ,   impulse.end()
+    (   begin (impulse)
+    ,   end (impulse)
     ,   [&] (const Impulse & i)
         {
             const unsigned long SAMPLE = round (i.time * samplerate);
@@ -185,6 +185,7 @@ Scene::Scene
 ,   vector <Triangle> & triangles
 ,   vector <cl_float3> & vertices
 ,   vector <Surface> & surfaces
+,   bool verbose 
 )
 :   nrays (directions.size())
 ,   nreflections (nreflections)
@@ -195,8 +196,16 @@ Scene::Scene
 ,   cl_vertices   (cl_context, begin (vertices),   end (vertices),   false)
 ,   cl_surfaces   (cl_context, begin (surfaces),   end (surfaces),   false)
 ,   cl_sphere     (cl_context, CL_MEM_READ_WRITE, sizeof (Sphere))
-,   cl_impulses   (cl_context, CL_MEM_READ_WRITE, directions.size() * nreflections * sizeof (Impulse))
-,   cl_attenuated (cl_context, CL_MEM_READ_WRITE, directions.size() * nreflections * sizeof (Impulse))
+,   cl_impulses   
+    (   cl_context
+    ,   CL_MEM_READ_WRITE
+    ,   directions.size() * nreflections * sizeof (Impulse)
+    )
+,   cl_attenuated 
+    (   cl_context
+    ,   CL_MEM_READ_WRITE
+    ,   directions.size() * nreflections * sizeof (Impulse)
+    )
 {
     ifstream cl_source_file ("kernel.cl");
     string cl_source_string 
@@ -283,14 +292,14 @@ public:
                 
             vertices.insert 
             (   vertices.end()
-            ,   meshVertices.begin()
-            ,   meshVertices.end()
+            ,   begin (meshVertices)
+            ,   end (meshVertices)
             );
 
             triangles.insert 
             (   triangles.end()
-            ,   meshTriangles.begin()
-            ,   meshTriangles.end()
+            ,   begin (meshTriangles)
+            ,   end (meshTriangles)
             );
         }
     }
@@ -360,6 +369,7 @@ Scene::Scene
 ,   unsigned long nreflections
 ,   std::vector <cl_float3> & directions
 ,   SceneData sceneData
+,   bool verbose 
 )
 :   Scene
 (   cl_context
@@ -377,6 +387,7 @@ Scene::Scene
 ,   unsigned long nreflections
 ,   std::vector <cl_float3> & directions
 ,   const std::string & objpath
+,   bool verbose 
 )
 :   Scene
 (   cl_context
@@ -386,6 +397,62 @@ Scene::Scene
 )
 {
 }
+
+#ifdef DIAGNOSTIC
+vector <Reflection> Scene::test (const cl_float3 & micpos, Sphere source)
+{
+    auto test = cl::make_kernel 
+    <   cl::Buffer
+    ,   cl_float3
+    ,   cl::Buffer
+    ,   unsigned long
+    ,   cl::Buffer
+    ,   cl::Buffer
+    ,   cl::Buffer
+    ,   cl::Buffer
+    ,   unsigned long
+    > (cl_program, "test");
+
+    Sphere * sp = &source;
+
+    cl::copy
+    (   queue
+    ,   sp
+    ,   sp + 1
+    ,   cl_sphere
+    );
+
+    cl_reflections = cl::Buffer 
+    (   cl_context
+    ,   CL_MEM_READ_WRITE
+    ,   nrays * nreflections * sizeof (Reflection)
+    );
+
+    test
+    (   cl::EnqueueArgs (queue, cl::NDRange (nrays))
+    ,   cl_directions
+    ,   micpos
+    ,   cl_triangles
+    ,   ntriangles
+    ,   cl_vertices
+    ,   cl_sphere
+    ,   cl_surfaces
+    ,   cl_reflections
+    ,   nreflections
+    );
+
+    vector <Reflection> reflections (nrays * nreflections);
+
+    cl::copy 
+    (   queue
+    ,   cl_reflections
+    ,   begin (reflections)
+    ,   end (reflections)
+    );
+
+    return reflections;
+}
+#endif
 
 void Scene::trace (const cl_float3 & micpos, Sphere source)
 {
@@ -448,8 +515,8 @@ vector <Impulse> Scene::attenuate (const Speaker & speaker)
     cl::copy 
     (   queue
     ,   cl_attenuated
-    ,   attenuated.begin()
-    ,   attenuated.end()
+    ,   begin (attenuated)
+    ,   end (attenuated)
     );
 
     return attenuated;
@@ -463,16 +530,3 @@ vector <vector <Impulse>> Scene::attenuate (const vector <Speaker> & speakers)
     return attenuated;
 }
 
-cl::Context getContext()
-{
-    vector <cl::Platform> platform;
-    cl::Platform::get (&platform);
-
-    cl_context_properties cps [3] = {
-        CL_CONTEXT_PLATFORM,
-        (cl_context_properties) (platform [0]) (),
-        0
-    };
-    
-    return cl::Context (CL_DEVICE_TYPE_GPU, cps);
-}

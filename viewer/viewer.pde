@@ -82,8 +82,7 @@ void stroke (PVector c)
 
 void draw()
 {
-  background (0.5
-  );
+  background (0.5);
   translate (width / 2, height / 2);
   rotateY (frameCount * TWO_PI * 0.01);
   scale (8);

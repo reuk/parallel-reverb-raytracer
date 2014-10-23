@@ -1,6 +1,6 @@
 #pragma once
 
-#define DIAGNOSTIC
+//#define DIAGNOSTIC
 
 #define __CL_ENABLE_EXCEPTIONS
 #include "cl.hpp"
@@ -8,6 +8,10 @@
 #include <vector>
 
 //  These definitions MUST be kept up-to-date with the defs in the cl file.
+//  It might make sense to nest them inside the Scene because I don't think
+//  other classes will need the same data formats.
+//
+//  Unless I have a new class/kernel for constructing BVHs?
 
 typedef struct  {
     cl_ulong surface;
@@ -68,7 +72,14 @@ std::vector <std::vector <float>> process
 ,   float samplerate
 ) throw();
 
-cl::Context getContext();
+//  Scene is imagined to be an 'initialize-once, use-many' kind of class.
+//  It's initialized with a certain set of geometry, and then it keeps that
+//  geometry throughout its lifespan.
+//
+//  If I were to allow the geometry to be updated, there's a chance the buffers
+//  would be reinitialized WHILE a kernel was running, and I'm not sure what
+//  would happen in that case (though I'm sure it would be bad). Unlike copies,
+//  reinitializing the buffer on the host is not queued.
 
 class Scene
 {
@@ -80,6 +91,7 @@ public:
     ,   std::vector <Triangle> & triangles
     ,   std::vector <cl_float3> & vertices
     ,   std::vector <Surface> & surfaces
+    ,   bool verbose = false
     );
 
     Scene
@@ -87,7 +99,15 @@ public:
     ,   unsigned long nreflections
     ,   std::vector <cl_float3> & directions
     ,   const std::string & objpath
+    ,   bool verbose = false
     );
+
+#ifdef DIAGNOSTIC
+    std::vector <Reflection> test
+    (   const cl_float3 & micpos
+    ,   Sphere source
+    );
+#endif
 
     void trace
     (   const cl_float3 & micpos
@@ -112,6 +132,10 @@ private:
     cl::Buffer cl_vertices;
     cl::Buffer cl_surfaces;
 
+#ifdef DIAGNOSTIC
+    cl::Buffer cl_reflections;
+#endif
+
     cl::Buffer cl_sphere;
 
     cl::Buffer cl_impulses;
@@ -128,5 +152,6 @@ private:
     ,   unsigned long nreflections
     ,   std::vector <cl_float3> & directions
     ,   SceneData sceneData
+    ,   bool verbose = false
     );
 };

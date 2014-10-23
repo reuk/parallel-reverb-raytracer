@@ -84,3 +84,16 @@ vector <cl_float3> getRandomDirections (unsigned long num)
     return ret;
 }
 
+cl::Context getContext()
+{
+    vector <cl::Platform> platform;
+    cl::Platform::get (&platform);
+
+    cl_context_properties cps [3] = {
+        CL_CONTEXT_PLATFORM,
+        (cl_context_properties) (platform [0]) (),
+        0
+    };
+    
+    return cl::Context (CL_DEVICE_TYPE_GPU, cps);
+}

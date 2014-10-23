@@ -54,6 +54,7 @@ namespace {
         });
     }
 
+    /*
     class SceneTest: public ::testing::Test
     {
     protected:
@@ -113,4 +114,5 @@ namespace {
             );
         });
     }
+    */
 }

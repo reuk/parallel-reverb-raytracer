@@ -29,6 +29,10 @@ to do
     * Add a function to the Scene class to facilitate validation of scene
       data
 
+* Consider multiple diffuse coefficients
+
+* Consider distance-based attennuation
+
 * Throw an error if an object is invalid / contains invalid materials.
 
 done
@@ -63,3 +67,15 @@ to think about
 * As long as I queue everything, I should be able to do other stuff on the main
   thread, and just block whenever I need to get a new ir from the generator.
 
+* What can Alex help me with?
+
+* Is it feasible to have an impulse-response or biquad filter per-surface?
+    * What about when there's just one surface?
+    * BUILD A DEMO
+
+plan for today
+--------------
+
+* Think about bvh, try to implement a simple one
+
+* If time, try to get the raytracer traversing the bvh properly
