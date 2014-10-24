@@ -43,6 +43,38 @@ cl_float3 sum (const cl_float3 & a, const cl_float3 & b) throw()
     };
 }
 
+std::vector <float> flattenCustomImpulses 
+(   const vector <Impulse> & impulse
+,   unsigned long NUM_IMPULSES
+,   const vector <vector <float>> & custom
+,   float samplerate
+) throw()
+{
+    const float MAX_TIME = max_element 
+    (   begin (impulse)
+    ,   end (impulse)
+    ,   LatestImpulse()
+    )->time;
+
+    const unsigned long MAX_SAMPLE = round (MAX_TIME * samplerate) + custom.back().size();
+
+    vector <float> flattened (MAX_SAMPLE, 0);
+
+    for (unsigned long i = 0; i != impulse.size(); ++i)
+    {
+        const unsigned long SAMPLE = round (impulse [i].time * samplerate);
+        const float vol = impulse [i].volume.s [0];
+        if (vol != 0)
+        {
+            const vector <float> & ref = custom [i % NUM_IMPULSES];
+            for (unsigned long j = 0; j != ref.size(); ++j)
+                flattened [SAMPLE + j] += ref [j] * vol;
+        }
+    }
+
+    return flattened;
+}
+
 vector <cl_float3> flattenImpulses 
 (   const vector <Impulse> & impulse
 ,   float samplerate
@@ -153,27 +185,8 @@ vector <vector <float>> process (vector <vector <cl_float3>> & data, float sr) t
         ret [i] = sum (data [i]);
         hipass (ret [i], 20, sr);
     }
-    
-    float max = 0;
-    for (int i = 0; i != ret.size(); ++i)
-    {
-        for (int j = 0; j != ret [i].size(); ++j)
-        {
-            const float F = fabs (ret [i] [j]);
-            if (F > max)
-            {
-                max = F;
-            }
-        }
-    }
-    
-    for (int i = 0; i != ret.size(); ++i)
-    {
-        for (int j = 0; j != ret [i].size(); ++j)
-        {
-            ret [i] [j] = (ret [i] [j] / max) * 0.99;
-        }
-    }
+
+    normalize (ret);
     
     return ret;
 }

@@ -5,7 +5,9 @@
 #define __CL_ENABLE_EXCEPTIONS
 #include "cl.hpp"
 
+#include <iostream>
 #include <vector>
+#include <cmath>
 
 //  These definitions MUST be kept up-to-date with the defs in the cl file.
 //  It might make sense to nest them inside the Scene because I don't think
@@ -67,10 +69,65 @@ std::vector <cl_float3> flattenImpulses
 ,   float samplerate
 ) throw();
 
+std::vector <float> flattenCustomImpulses 
+(   const std::vector <Impulse> & impulse
+,   unsigned long NUM_IMPULSES
+,   const std::vector <std::vector <float>> & custom
+,   float samplerate
+) throw();
+
 std::vector <std::vector <float>> process 
 (   std::vector <std::vector <cl_float3>> & data
 ,   float samplerate
 ) throw();
+
+
+template <typename T>
+inline float max_amp (const std::vector <T> & ret) throw()
+{
+    float m = 0;
+    for (const T & i : ret)
+        m = std::max (m, max_amp (i));
+    return m;
+}
+
+struct FabsMax: std::binary_function <float, float, bool>
+{
+    inline bool operator() (float a, float b) const
+    {
+        return fabs (a) < fabs (b);
+    }
+};
+
+template<>
+inline float max_amp (const std::vector <float> & ret) throw()
+{
+    return *std::max_element 
+    (   std::begin (ret)
+    ,   std::end (ret)
+    ,   FabsMax()
+    );
+}
+
+template <typename T>
+inline void div (std::vector <T> & ret, float f) throw()
+{
+    for (T & i : ret)
+        div (i, f);
+}
+
+template<>
+inline void div (std::vector <float> & ret, float f) throw()
+{
+    for (float & i : ret)
+        i /= f;
+}
+
+template <typename T>
+inline void normalize (std::vector <T> & ret) throw()
+{
+    div (ret, max_amp (ret) * 1.01);
+}
 
 //  Scene is imagined to be an 'initialize-once, use-many' kind of class.
 //  It's initialized with a certain set of geometry, and then it keeps that

@@ -3,6 +3,7 @@
 
 #include "sndfile.hh"
 
+#include <sstream>
 #include <iostream>
 #include <vector>
 #include <random>
@@ -11,8 +12,31 @@
 
 using namespace std;
 
-int main(int argc, const char * argv[])
+vector <float> dconvolve (const vector <float> & a, const vector <float> & b)
 {
+    vector <float> ret (a.size() + b.size() - 1, 0);
+
+    for (unsigned long i = 0; i != a.size(); ++i)
+    {
+        const float in = a [i];
+
+        for (unsigned long j = 0; j != b.size(); ++j)
+        {
+            ret [i + j] += in * b [j];
+        }
+    }
+
+    return ret;
+}
+
+int main (int argc, const char * argv[])
+{
+    const float SAMPLE_RATE = 44100;
+
+    SndfileHandle infile ("../../pulse.aif");
+    vector <float> impulse (infile.frames());
+    infile.read (impulse.data(), impulse.size());
+
     Sphere sphere = {(cl_float3) {5, 5, 5, 0}, 1};
 
     vector <Speaker> speakers 
@@ -20,8 +44,51 @@ int main(int argc, const char * argv[])
     ,   (Speaker) {(cl_float3) {0, 1, 0}, 0.5}
     };
     
-    const unsigned long NUM_RAYS = 1024 * 32;
+    const unsigned long NUM_RAYS = 1024 * 1;
     const unsigned long NUM_IMPULSES = 128;
+
+    float impulse_sum = 0;
+    for (const auto & i : impulse)
+        impulse_sum += fabs (i);
+
+    div (impulse, impulse_sum);
+
+    vector <float> temp = impulse;
+    vector <vector <float>> precalc;
+
+    for (int i = 0; i != NUM_IMPULSES; ++i)
+    {
+        precalc.push_back (temp);
+        temp = dconvolve (impulse, temp);
+    } 
+
+    /*
+    for (int i = 0; i != precalc.size(); ++i)
+    {
+        stringstream str;
+        str << "para_" << i << ".aiff";
+
+        vector <float> norm (precalc [i]);
+        normalize (norm);
+
+        if (i == 2)
+        {
+            for (const auto & j : norm)
+            {
+                cout << j << endl;
+            }
+        }
+
+        SndfileHandle outfile 
+        (   str.str()
+        ,   SFM_WRITE
+        ,   SF_FORMAT_AIFF | SF_FORMAT_PCM_16
+        ,   1
+        ,   SAMPLE_RATE
+        );
+        outfile.write (norm.data(), norm.size());
+    }
+    */
 
     vector <cl_float3> directions = getRandomDirections (NUM_RAYS);
     vector <vector <Impulse>> attenuated;
@@ -62,20 +129,23 @@ int main(int argc, const char * argv[])
         return 1;
     }
 
-    const float SAMPLE_RATE = 44100;
-    vector <vector <cl_float3>> flattened;
-    for (int i = 0; i != attenuated.size(); ++i)
+    vector <vector <float>> flattened;
+    for (const auto & i : attenuated)
     {
         flattened.push_back 
-        (   flattenImpulses 
-            (   attenuated [i]
+        (   flattenCustomImpulses 
+            (   i
+            ,   NUM_IMPULSES
+            ,   precalc
             ,   SAMPLE_RATE
             )
         );
     }
-    
-    vector <vector <float>> outdata = process (flattened, SAMPLE_RATE);
-    
+
+    normalize (flattened);
+
+    vector <vector <float>> outdata (flattened);
+
     vector <float> interleaved (outdata.size() * outdata [0].size());
     
     for (int i = 0; i != outdata.size(); ++i)
@@ -84,7 +154,13 @@ int main(int argc, const char * argv[])
             interleaved [j * outdata.size() + i] = outdata [i] [j];
     }
     
-    SndfileHandle outfile ("para.aiff", SFM_WRITE, SF_FORMAT_AIFF | SF_FORMAT_PCM_16, outdata.size(), SAMPLE_RATE);
+    SndfileHandle outfile 
+    (   "para.aiff"
+    ,   SFM_WRITE
+    ,   SF_FORMAT_AIFF | SF_FORMAT_PCM_16
+    ,   outdata.size()
+    ,   SAMPLE_RATE
+    );
     outfile.write (interleaved.data(), interleaved.size());
 
     return 0;
