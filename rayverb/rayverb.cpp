@@ -25,7 +25,7 @@ cl_float3 fromAIVec (const aiVector3D & v)
     return (cl_float3) {v.x, v.y, v.z, 0};
 }
 
-struct LatestImpulse: binary_function <Impulse, Impulse, bool>
+struct LatestImpulse: public binary_function <Impulse, Impulse, bool>
 {
     inline bool operator() (const Impulse & a, const Impulse & b) const throw()
     {
@@ -48,47 +48,59 @@ vector <cl_float3> flattenImpulses
 ,   float samplerate
 ) throw()
 {
-    const float MAX_TIME = max_element (begin (impulse), end (impulse), LatestImpulse())->time;
+    const float MAX_TIME = max_element 
+    (   begin (impulse)
+    ,   end (impulse)
+    ,   LatestImpulse()
+    )->time;
     const unsigned long MAX_SAMPLE = round (MAX_TIME * samplerate);
     
     vector <cl_float3> flattened (MAX_SAMPLE, (cl_float3) {0});
 
-    for_each 
-    (   begin (impulse)
-    ,   end (impulse)
-    ,   [&] (const Impulse & i)
-        {
-            const unsigned long SAMPLE = round (i.time * samplerate);
-            flattened [SAMPLE] = sum (flattened [SAMPLE], i.volume);
-        }
-    );
+    for (const auto & i : impulse)
+    {
+        const unsigned long SAMPLE = round (i.time * samplerate);
+        flattened [SAMPLE] = sum (flattened [SAMPLE], i.volume);
+    }
 
     return flattened;
 }
 
-void lopass (vector <cl_float3> & data, float cutoff, float sr, int index) throw()
+void lopass 
+(   vector <cl_float3> & data
+,   float cutoff
+,   float sr
+,   int index
+) throw()
 {
     const float param = 1 - exp (-2 * M_PI * cutoff / sr);
     float state = 0;
-    
-    for (auto i = begin (data); i != end (data); ++i)
-    {
-        i->s [index] = state += param * (i->s [index] - state);
-    }
+
+    for (auto & i : data)
+        i.s [index] = state += param * (i.s [index] - state);
 }
 
-void hipass (vector <cl_float3> & data, float cutoff, float sr, int index) throw()
+void hipass 
+(   vector <cl_float3> & data
+,   float cutoff
+,   float sr
+,   int index
+) throw()
 {
     const float param = 1 - exp (-2 * M_PI * cutoff / sr);
     float state = 0;
-    
-    for (auto i = begin (data); i != end (data); ++i)
-    {
-        i->s [index] -= state += param * (i->s [index] - state);
-    }
+
+    for (auto & i : data)
+        i.s [index] -= state += param * (i.s [index] - state);
 }
 
-void bandpass (vector <cl_float3> & data, float lo, float hi, float sr, int index) throw()
+void bandpass 
+(   vector <cl_float3> & data
+,   float lo
+,   float hi
+,   float sr
+,   int index
+) throw()
 {
     lopass (data, hi, sr, index);
     hipass (data, lo, sr, index);
@@ -102,18 +114,18 @@ void filter (vector <cl_float3> & data, float lo, float hi, float sr) throw()
     
     __m128 state = {0};
     __m128 params = {loParam, hiParam, loParam, hiParam};
-    
-    for (auto i = begin (data); i != end (data); ++i)
+
+    for (auto & i : data)
     {
-        __m128 in = {i->s [0], i->s [1], i->s [1], i->s [2]};
+        __m128 in = {i.s [0], i.s [1], i.s [1], i.s [2]};
         __m128 t0 = _mm_sub_ps (in, state);
         __m128 t1 = _mm_mul_ps (t0, params);
         state = _mm_add_ps (t1, state);
         
-        i->s [0] = state [0];
-        i->s [1] = state [1];
-        i->s [1] -= state [2];
-        i->s [2] -= state [3];
+        i.s [0] = state [0];
+        i.s [1] = state [1];
+        i.s [1] -= state [2];
+        i.s [2] -= state [3];
     }
 #else
     lopass (data, lo, sr, 0);
@@ -126,24 +138,30 @@ void hipass (vector <float> & data, float lo, float sr) throw()
 {
     const float loParam = 1 - exp (-2 * M_PI * lo / sr);
     float loState = 0;
-    
-    for (auto i = begin (data); i != end (data); ++i)
-    {
-        *i -= loState += loParam * (*i - loState);
-    }
+
+    for (auto & i : data)
+        i -= loState += loParam * (i - loState);
 }
+
+struct Sum: public unary_function <cl_float3, float>
+{
+    inline float operator() (const cl_float3 & i) const
+    {
+        return accumulate (i.s, i.s + 3, 0.0);
+    }
+};
 
 vector <float> sum (const vector <cl_float3> & data) throw()
 {
     vector <float> ret (data.size());
-    for (unsigned long i = 0; i != data.size(); ++i)
-    {
-        ret [i] = accumulate (data [i].s, data[i].s + 3, 0.0);
-    }
+    transform (begin (data), end (data), begin (ret), Sum());
     return ret;
 }
 
-vector <vector <float>> process (vector <vector <cl_float3>> & data, float sr) throw()
+vector <vector <float>> process 
+(   vector <vector <cl_float3>> & data
+,   float sr
+) throw()
 {
     vector <vector <float>> ret (data.size());
     
