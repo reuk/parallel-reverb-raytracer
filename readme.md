@@ -7,9 +7,10 @@ lighting techniques. Uses OpenCL for IMMENSE SPEED.
 to do
 -----
 
-* Integrate with realtime convolution.
-    * Try to make realtime(ish) maybe
-    * The realtime convolution still needs threading somehow
+* Throw an error if an object is invalid / contains invalid materials.
+
+* Consider faster intersection-calcluation algorithms
+    * Might actually end up slower due to increased divergence
 
 * Use hrtf
     * Write a speedy hrtf calculator
@@ -19,9 +20,6 @@ to do
     * Can probably do this by just running the process several times
     * Keep all the geometry loaded, to reduce slowdown
 
-* Consider faster intersection-calcluation algorithms
-    * Might actually end up slower due to increased divergence
-
 * Add a proper testing framework
     * Aim for coverage of all the library-visible functions first
     * Then for coverage of internal functions if time
@@ -29,11 +27,16 @@ to do
     * Add a function to the Scene class to facilitate validation of scene
       data
 
-* Consider multiple diffuse coefficients
-
 * Consider distance-based attennuation
 
-* Throw an error if an object is invalid / contains invalid materials.
+maybe
+-----
+
+* Integrate with realtime convolution.
+    * Try to make realtime(ish) maybe
+    * The realtime convolution still needs threading somehow
+
+* Consider multiple diffuse coefficients
 
 done
 ----
@@ -66,16 +69,3 @@ to think about
 
 * As long as I queue everything, I should be able to do other stuff on the main
   thread, and just block whenever I need to get a new ir from the generator.
-
-* What can Alex help me with?
-
-* Is it feasible to have an impulse-response or biquad filter per-surface?
-    * What about when there's just one surface?
-    * BUILD A DEMO
-
-plan for today
---------------
-
-* Think about bvh, try to implement a simple one
-
-* If time, try to get the raytracer traversing the bvh properly
