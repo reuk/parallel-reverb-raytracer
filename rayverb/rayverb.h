@@ -6,6 +6,9 @@
 #include "cl.hpp"
 
 #include <vector>
+#include <cmath>
+#include <numeric>
+#include <iostream>
 
 //  These definitions MUST be kept up-to-date with the defs in the cl file.
 //  It might make sense to nest them inside the Scene because I don't think
@@ -71,6 +74,49 @@ std::vector <std::vector <float>> process
 (   std::vector <std::vector <cl_float3>> & data
 ,   float samplerate
 ) throw();
+
+template <typename T>
+inline float max_amp (const std::vector <T> & ret) throw();
+
+template <typename T>
+struct FabsMax: public std::binary_function <float, T, float>
+{
+    inline float operator() (float a, T b) const throw() 
+        { return std::max (a, max_amp (b)); }
+};
+
+template<>
+struct FabsMax <float>: public std::binary_function <float, float, float>
+{
+    inline float operator() (float a, float b) const throw() 
+        { return std::max (a, std::fabs (b)); }
+};
+
+template <typename T>
+inline float max_amp (const std::vector <T> & ret) throw()
+{
+    return std::accumulate (begin (ret), end (ret), 0.0f, FabsMax <T>());
+}
+
+template <typename T>
+inline void div (T & ret, float f) throw()
+{
+    for (auto & i : ret)
+        div (i, f);
+}
+
+template<>
+inline void div (float & ret, float f) throw()
+{
+    ret /= f;
+}
+
+template <typename T>
+inline void normalize (std::vector <T> & ret) throw()
+{
+    div (ret, max_amp (ret));
+}
+
 
 //  Scene is imagined to be an 'initialize-once, use-many' kind of class.
 //  It's initialized with a certain set of geometry, and then it keeps that

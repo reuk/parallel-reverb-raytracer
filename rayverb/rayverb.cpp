@@ -172,26 +172,7 @@ vector <vector <float>> process
         hipass (ret [i], 20, sr);
     }
     
-    float max = 0;
-    for (int i = 0; i != ret.size(); ++i)
-    {
-        for (int j = 0; j != ret [i].size(); ++j)
-        {
-            const float F = fabs (ret [i] [j]);
-            if (F > max)
-            {
-                max = F;
-            }
-        }
-    }
-    
-    for (int i = 0; i != ret.size(); ++i)
-    {
-        for (int j = 0; j != ret [i].size(); ++j)
-        {
-            ret [i] [j] = (ret [i] [j] / max) * 0.99;
-        }
-    }
+    normalize (ret);
     
     return ret;
 }
