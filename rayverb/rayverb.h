@@ -64,6 +64,11 @@ typedef struct  {
 
 typedef _Speaker_unalign __attribute__ ((aligned(8))) Speaker;
 
+std::vector <float> dconvolve 
+(   const std::vector <float> & a
+,   std::vector <float> & b
+);
+
 std::vector <cl_float3> flattenImpulses 
 (   const std::vector <Impulse> & impulse
 ,   float samplerate

@@ -43,6 +43,40 @@ cl_float3 sum (const cl_float3 & a, const cl_float3 & b) throw()
     };
 }
 
+std::vector <float> flattenCustomReflectionLevel
+(   const vector <Impulse> & impulse
+,   unsigned long REFLECTION_LEVEL
+,   unsigned long NUM_IMPULSES
+,   float samplerate
+) throw()
+{
+    float maxtime = 0;
+
+    for 
+    (   unsigned long i = REFLECTION_LEVEL
+    ;   i < impulse.size()
+    ;   i += NUM_IMPULSES
+    )
+        maxtime = max (maxtime, impulse [i].time);
+
+    const unsigned long MAX_SAMPLE = round (maxtime * samplerate) + 1;
+
+    vector <float> flattened (MAX_SAMPLE, 0);
+
+    for 
+    (   unsigned long i = REFLECTION_LEVEL
+    ;   i < impulse.size()
+    ;   i += NUM_IMPULSES
+    )
+    {
+        const unsigned long SAMPLE = round (impulse [i].time * samplerate);
+        const float vol = impulse [i].volume.s [0];
+        flattened [SAMPLE] += vol;
+    }
+
+    return flattened;
+}
+
 std::vector <float> flattenCustomImpulses 
 (   const vector <Impulse> & impulse
 ,   unsigned long NUM_IMPULSES
@@ -56,24 +90,67 @@ std::vector <float> flattenCustomImpulses
     ,   LatestImpulse()
     )->time;
 
-    const unsigned long MAX_SAMPLE = round (MAX_TIME * samplerate) + custom.back().size();
+    const unsigned long MAX_SAMPLE = round (MAX_TIME * samplerate) + custom.back().size() + 1;
 
     vector <float> flattened (MAX_SAMPLE, 0);
 
-    for (unsigned long i = 0; i != impulse.size(); ++i)
+    for (unsigned long i = 0; i != NUM_IMPULSES; ++i)
     {
-        const unsigned long SAMPLE = round (impulse [i].time * samplerate);
-        const float vol = impulse [i].volume.s [0];
-        if (vol != 0)
-        {
-            const vector <float> & ref = custom [i % NUM_IMPULSES];
-            for (unsigned long j = 0; j != ref.size(); ++j)
-                flattened [SAMPLE + j] += ref [j] * vol;
-        }
+        vector <float> refi = flattenCustomReflectionLevel
+        (   impulse
+        ,   i
+        ,   NUM_IMPULSES
+        ,   samplerate
+        );
+
+        cout << i;
+
+        vector <float> convolved = dconvolve (custom [i], refi);
+
+        cout << " convolved";
+
+        for (unsigned long j = 0; j != convolved.size(); ++j)
+            flattened [j] += convolved [j];
+
+        cout << endl;
     }
 
     return flattened;
 }
+
+vector <float> dconvolve (const vector <float> & a, vector <float> & b)
+{
+    while ((b.size() % 4) != 0)
+        b.push_back (0);
+
+    vector <float> ret (a.size() + b.size() - 1, 0);
+
+    for (unsigned long i = 0; i != a.size(); ++i)
+    {
+        const float in = a [i];
+        if (in != 0)
+#ifdef VECTORISE
+            __m128 four = {in, in, in, in};
+#endif
+            for (unsigned long j = 0; j != b.size(); j += 4)
+            {
+#ifdef VECTORISE
+                __m128 in = {b [j + 0], b [j + 1], b [j + 2], b [j + 3]};
+                __m128 t0 = _mm_mul_ps (in, four);
+                __m128 t1 = {ret [i + j + 0], ret [i + j + 1], ret [i + j + 2], ret [i + j + 3]};
+                __m128 t2 = _mm_add_ps (t0, t1);
+
+                for (int k = 0; k != 4; ++k)
+                    ret [i + j + k] = t2 [k];
+#else
+                ret [i + j] += in * b [j];
+#endif
+            }
+    }
+
+    return ret;
+}
+
 
 vector <cl_float3> flattenImpulses 
 (   const vector <Impulse> & impulse
@@ -232,11 +309,9 @@ Scene::Scene
 
     cl::Device used_device = device.back();
     
-    /*
     cerr 
     <<  cl_program.getBuildInfo <CL_PROGRAM_BUILD_LOG> (used_device) 
     << endl;
-    */
 
     queue = cl::CommandQueue (cl_context, used_device);
 }

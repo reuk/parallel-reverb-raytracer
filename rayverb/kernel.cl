@@ -367,8 +367,6 @@ kernel void raytrace
             *   dot (reflection.normal, direction)
             );
             impulses [i * outputOffset + index] = (Impulse) {volume, time};
-
-            ++index;
         }
 
         Ray newRay = triangle_reflectAt 
@@ -378,6 +376,7 @@ kernel void raytrace
         ,   intersection
         );
 
+        ++index;
         ray = newRay;
         distance = newDist;
         volume = newVol;

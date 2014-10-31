@@ -12,22 +12,6 @@
 
 using namespace std;
 
-vector <float> dconvolve (const vector <float> & a, const vector <float> & b)
-{
-    vector <float> ret (a.size() + b.size() - 1, 0);
-
-    for (unsigned long i = 0; i != a.size(); ++i)
-    {
-        const float in = a [i];
-
-        for (unsigned long j = 0; j != b.size(); ++j)
-        {
-            ret [i + j] += in * b [j];
-        }
-    }
-
-    return ret;
-}
 
 int main (int argc, const char * argv[])
 {
