@@ -52,6 +52,55 @@ typedef struct {
     float coefficient;
 } Speaker;
 
+//  function definitions
+
+float triangle_intersection 
+(   global Triangle * triangle
+,   global float3 * vertices
+,   Ray * ray
+);
+
+float3 triangle_normal 
+(   global Triangle * triangle
+,   global float3 * vertices
+);
+
+float3 reflect (float3 normal, float3 direction);
+
+Ray ray_reflect (Ray * ray, float3 normal, float3 intersection);
+
+Ray triangle_reflectAt 
+(   global Triangle * triangle
+,   global float3 * vertices
+,   Ray * ray
+,   float3 intersection
+);
+
+float sphere_intersection (global Sphere * sphere, Ray * ray);
+
+Intersection ray_triangle_intersection 
+(   Ray * ray
+,   global Triangle * triangles
+,   unsigned long numtriangles
+,   global float3 * vertices
+);
+
+Intersection ray_sphere_intersection (Ray * ray, global Sphere * sphere);
+
+bool anyAbove (float3 in, float thresh);
+
+Intersection ray_intersection 
+(   Ray * ray
+,   global Sphere * sphere
+,   global Triangle * triangles
+,   unsigned long numtriangles
+,   global float3 * vertices
+);
+
+void test_value (global Impulse * impulse, float f);
+
+float speaker_attenuation (Speaker * speaker, float3 direction);
+
 //  implementations
 
 float triangle_intersection (global Triangle * triangle,

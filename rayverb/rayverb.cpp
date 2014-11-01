@@ -218,150 +218,144 @@ Scene::Scene
 
     cl::Device used_device = device.back();
     
-    /*
     cerr 
     <<  cl_program.getBuildInfo <CL_PROGRAM_BUILD_LOG> (used_device) 
     << endl;
-    */
 
     queue = cl::CommandQueue (cl_context, used_device);
 }
 
-struct Scene::SceneData
+SceneData::SceneData (const std::string & objpath)
 {
-public:
-    SceneData (const std::string & objpath)
-    {
-        populate (objpath);
-    }
+    populate (objpath);
+}
 
-    void populate (const aiScene * scene)
+void SceneData::populate (const aiScene * scene)
+{
+    if (! scene)
+        throw runtime_error ("Failed to load object file.");
+    
+    for (unsigned long i = 0; i != scene->mNumMeshes; ++i)
     {
-        if (! scene)
-            throw runtime_error ("Failed to load object file.");
+        const aiMesh * mesh = scene->mMeshes [i];
         
-        for (unsigned long i = 0; i != scene->mNumMeshes; ++i)
+        vector <cl_float3> meshVertices (mesh->mNumVertices);
+        
+        for (unsigned long j = 0; j != mesh->mNumVertices; ++j)
         {
-            const aiMesh * mesh = scene->mMeshes [i];
-            
-            vector <cl_float3> meshVertices (mesh->mNumVertices);
-            
-            for (unsigned long j = 0; j != mesh->mNumVertices; ++j)
-            {
-                meshVertices [j] = fromAIVec (mesh->mVertices [j]);
-            }
-            
-#ifdef USE_OBJECT_MATERIALS
-            const aiMaterial * material = scene->mMaterials 
-            [   mesh->mMaterialIndex
-            ];
-
-            aiColor3D diffuse (0.9, 0.8, 0.7);
-            material->Get(AI_MATKEY_COLOR_DIFFUSE, diffuse);
-            
-            aiColor3D specular (0.9, 0.8, 0.7);
-            material->Get(AI_MATKEY_COLOR_SPECULAR, specular);
-            
-            Surface surface = {
-                (cl_float3) {specular.r, specular.g, specular.b, 0},
-                (cl_float3) {diffuse.r, diffuse.g, diffuse.b, 0}
-            };
-#else
-            Surface surface = {
-                (cl_float3) {0.95, 0.85, 0.75, 0},
-                (cl_float3) {0.95, 0.85, 0.75, 0}
-            };
-#endif
-            
-            surfaces.push_back (surface);
-            
-            vector <Triangle> meshTriangles (mesh->mNumFaces);
-            
-            for (unsigned long j = 0; j != mesh->mNumFaces; ++j)
-            {
-                const aiFace face = mesh->mFaces [j];
-                
-                meshTriangles [j] = (Triangle) {
-                    surfaces.size() - 1,
-                    vertices.size() + face.mIndices [0],
-                    vertices.size() + face.mIndices [1],
-                    vertices.size() + face.mIndices [2]
-                };
-            }
-                
-            vertices.insert 
-            (   vertices.end()
-            ,   begin (meshVertices)
-            ,   end (meshVertices)
-            );
-
-            triangles.insert 
-            (   triangles.end()
-            ,   begin (meshTriangles)
-            ,   end (meshTriangles)
-            );
+            meshVertices [j] = fromAIVec (mesh->mVertices [j]);
         }
-    }
+        
+#ifdef USE_OBJECT_MATERIALS
+        const aiMaterial * material = scene->mMaterials 
+        [   mesh->mMaterialIndex
+        ];
 
-    void populate (const std::string & objpath)
-    {
-        Assimp::Importer importer;
-        populate 
-        (   importer.ReadFile 
-            (   objpath
-            ,   (   aiProcess_Triangulate 
-                |   aiProcess_GenSmoothNormals 
-                |   aiProcess_FlipUVs
-                )
-            )
+        aiColor3D diffuse (0.9, 0.8, 0.7);
+        material->Get(AI_MATKEY_COLOR_DIFFUSE, diffuse);
+        
+        aiColor3D specular (0.9, 0.8, 0.7);
+        material->Get(AI_MATKEY_COLOR_SPECULAR, specular);
+        
+        Surface surface = {
+            (cl_float3) {specular.r, specular.g, specular.b, 0},
+            (cl_float3) {diffuse.r, diffuse.g, diffuse.b, 0}
+        };
+#else
+        Surface surface = {
+            (cl_float3) {0.95, 0.85, 0.75, 0},
+            (cl_float3) {0.95, 0.85, 0.75, 0}
+        };
+#endif
+        
+        surfaces.push_back (surface);
+        
+        vector <Triangle> meshTriangles (mesh->mNumFaces);
+        
+        for (unsigned long j = 0; j != mesh->mNumFaces; ++j)
+        {
+            const aiFace face = mesh->mFaces [j];
+            
+            meshTriangles [j] = (Triangle) {
+                surfaces.size() - 1,
+                vertices.size() + face.mIndices [0],
+                vertices.size() + face.mIndices [1],
+                vertices.size() + face.mIndices [2]
+            };
+        }
+            
+        vertices.insert 
+        (   vertices.end()
+        ,   begin (meshVertices)
+        ,   end (meshVertices)
+        );
+
+        triangles.insert 
+        (   triangles.end()
+        ,   begin (meshTriangles)
+        ,   end (meshTriangles)
         );
     }
+}
 
-    bool validSurfaces()
+void SceneData::populate (const std::string & objpath)
+{
+    Assimp::Importer importer;
+    populate 
+    (   importer.ReadFile 
+        (   objpath
+        ,   (   aiProcess_Triangulate 
+            |   aiProcess_GenSmoothNormals 
+            |   aiProcess_FlipUVs
+            )
+        )
+    );
+}
+
+bool SceneData::validSurfaces() const
+{
+    for (const Surface & s : surfaces)
     {
-        for (const Surface & s : surfaces)
-        {
-            for (int i = 0; i != 3; ++i)
-            {
-                if 
-                (   s.specular.s [i] < 0 || 1 < s.specular.s [i]
-                ||  s.diffuse.s [i] < 0 || 1 < s.diffuse.s [i]
-                )
-                    return false;
-            }
-        }
-
-        return true;
-    }
-
-    bool validTriangles()
-    {
-        for (const Triangle & t : triangles)
+        for (int i = 0; i != 3; ++i)
         {
             if 
-            (   surfaces.size() <= t.surface
-            ||  vertices.size() <= t.v0
-            ||  vertices.size() <= t.v1
-            ||  vertices.size() <= t.v2
+            (   s.specular.s [i] < 0 || 1 < s.specular.s [i]
+            ||  s.diffuse.s [i] < 0 || 1 < s.diffuse.s [i]
             )
                 return false;
         }
-
-        return true;
     }
 
-    bool valid()
+    return true;
+}
+
+bool SceneData::validTriangles() const
+{
+    for (const Triangle & t : triangles)
     {
-        if (triangles.empty() || vertices.empty() || surfaces.empty())
+        if 
+        (   surfaces.size() <= t.surface
+        ||  vertices.size() <= t.v0
+        ||  vertices.size() <= t.v1
+        ||  vertices.size() <= t.v2
+        )
             return false;
-
-        return validSurfaces() && validTriangles();
     }
 
-    std::vector <Triangle> triangles;
-    std::vector <cl_float3> vertices;
-    std::vector <Surface> surfaces;
-};
+    return true;
+}
+
+bool SceneData::valid() const
+{
+    if (triangles.empty() || vertices.empty() || surfaces.empty())
+        return false;
+
+    return validSurfaces() && validTriangles();
+}
+
+inline std::vector <Triangle> & SceneData::getTriangles() { return triangles; }
+inline std::vector <cl_float3> & SceneData::getVertices() { return vertices; }
+inline std::vector <Surface> & SceneData::getSurfaces() { return surfaces; }
 
 Scene::Scene
 (   cl::Context & cl_context
@@ -374,9 +368,9 @@ Scene::Scene
 (   cl_context
 ,   nreflections
 ,   directions
-,   sceneData.triangles
-,   sceneData.vertices
-,   sceneData.surfaces
+,   sceneData.getTriangles()
+,   sceneData.getVertices()
+,   sceneData.getSurfaces()
 )
 {
 }
@@ -529,3 +523,253 @@ vector <vector <Impulse>> Scene::attenuate (const vector <Speaker> & speakers)
     return attenuated;
 }
 
+BVH::BVH (SceneData sceneData)
+:   triangles (sceneData.getTriangles())
+,   vertices (sceneData.getVertices())
+,   surfaces (sceneData.getSurfaces())
+{
+}
+
+BVH::BVH
+(   std::vector <Triangle> & triangles
+,   std::vector <cl_float3> & vertices
+,   std::vector <Surface> & surfaces
+)
+:   triangles (triangles)
+,   vertices (vertices)
+,   surfaces (surfaces)
+{
+}
+
+inline void minMaxFloat3 (AABB & aabb, const cl_float3 & f)
+{
+    for (int i = 0; i != 4; ++i)
+    {
+        aabb.min.s [i] = min (aabb.min.s [i], f.s [i]);
+        aabb.max.s [i] = max (aabb.max.s [i], f.s [i]);
+    }
+}
+
+struct MinMaxFloat3: public binary_function <AABB, cl_float3, AABB>
+{
+    inline AABB operator() (const AABB & aabb, const cl_float3 & f) const
+    {
+        AABB ret = aabb;
+        minMaxFloat3 (ret, f);
+        return ret;
+    }
+};
+
+struct MinMaxAABB: public binary_function <AABB, AABB, AABB>
+{
+    inline AABB operator() (const AABB & a, const AABB & b) const
+    {
+        AABB ret;
+        for (int i = 0; i != 4; ++i)
+        {
+            ret.min.s [i] = min (a.min.s [i], b.min.s [i]);
+            ret.max.s [i] = max (a.max.s [i], b.max.s [i]);
+        }
+        return ret;
+    }
+};
+
+template <typename T>
+struct GetAABB: public unary_function <T, AABB>
+{
+    GetAABB (const vector <cl_float3> & vertices)
+    :   vertices (vertices)
+    {
+    }
+
+    inline AABB operator() (const T & t) const
+    {
+        return getAABB (t, vertices);
+    }
+
+private:
+    const vector <cl_float3> & vertices;
+};
+
+template <typename T>
+inline AABB getAABB 
+(   const T & t
+,   const vector <cl_float3> & vertices
+)
+{
+    vector <AABB> aabb (t.size());
+    transform (t.begin(), t.end(), aabb.begin(), GetAABB <decltype(t.front())> (vertices));
+
+    return accumulate 
+    (   aabb.begin() + 1
+    ,   aabb.end()
+    ,   aabb.front()
+    ,   MinMaxAABB()
+    );
+}
+
+template<>
+inline AABB getAABB 
+(   const Triangle & t
+,   const vector <cl_float3> & vertices
+)
+{
+    std::vector <cl_float3> v = 
+    {   vertices [t.v0]
+    ,   vertices [t.v1]
+    ,   vertices [t.v2]
+    };
+
+    return accumulate 
+    (   v.begin() + 1
+    ,   v.end()
+    ,   (AABB) {v.front(), v.front()}
+    ,   MinMaxFloat3()
+    );
+}
+
+template<>
+inline AABB getAABB
+(   const AABB & aabb
+,   const vector <cl_float3> & vertices
+)
+{
+    return aabb;
+}
+
+cl_float3 centroid (const Triangle & t, const vector <cl_float3> & v)
+{
+    cl_float3 f = sum (v [t.v0], sum (v [t.v1], v [t.v2]));
+    for (int i = 0; i != 3; ++i)
+        f.s [i] /= 3;
+    return f;
+}
+
+uint32_t BVH::keyForCell (const cl_uint3 & outer, const cl_uint3 & inner)
+{
+    uint32_t outer_key = 0;
+    uint32_t inner_key = 0;
+    for (int i = 0; i != 3; ++i)
+    {
+        outer_key |= (outer.s [i] & (OUT_DIVISIONS - 1)) << (OUT_BITS * i);
+        inner_key |= (inner.s [i] & (IN_DIVISIONS - 1)) << (IN_BITS * i);
+    }
+
+    return (outer_key << (IN_BITS * 3)) | inner_key;
+}
+
+cl_uint3 BVH::outerCellForKey (uint32_t key)
+{
+    key >>= IN_BITS * 3;
+    cl_uint3 ret;
+    for (int i = 0; i != 3; ++i)
+        ret.s [i] = (OUT_DIVISIONS - 1) & (key >> (OUT_BITS * i));
+    return ret;
+}
+
+cl_uint3 BVH::innerCellForKey (uint32_t key)
+{
+    cl_uint3 ret;
+    for (int i = 0; i != 3; ++i)
+        ret.s [i] = (IN_DIVISIONS - 1) & (key >> (IN_BITS * i));
+    return ret;
+}
+
+template <typename T>
+void printvec (const string & title, const T & t)
+{
+    cout 
+    <<  title 
+    <<  ": " 
+    <<  t.s [0] 
+    <<  ", " 
+    <<  t.s [1] 
+    <<  ", " 
+    <<  t.s [2] 
+    <<  endl;
+}
+
+cl_uint3 BVH::grid0cell (const cl_float3 & pt, const AABB & aabb)
+{
+    uint32_t divisions = 1 << (IN_BITS + OUT_BITS);
+    cl_uint3 ret;
+    for (int i = 0; i != 3; ++i)
+    {
+        float diff = aabb.max.s [i] - aabb.min.s [i];
+        float p = pt.s [i];
+        ret.s [i] = floor (((p - aabb.min.s [i]) * divisions) / diff);
+    }
+    return ret;
+}
+
+struct CellRefPair
+{
+    uint32_t refID, cellID;
+};
+
+void BVH::build()
+{
+    AABB aabb = getAABB (triangles, vertices);
+    printvec ("min", aabb.min);
+    printvec ("max", aabb.max);
+
+    //  categorise
+
+    vector <CellRefPair> cellrefpair;
+    for (uint32_t i = 0; i != triangles.size(); ++i)
+    {
+        cl_float3 c = centroid (triangles [i], vertices);
+        cl_uint3 k = grid0cell (c, aabb);
+
+        cl_uint3 outer, inner;
+        for (int j = 0; j != 3; ++j)
+        {
+            outer.s [j] = k.s [j] / IN_DIVISIONS;
+            inner.s [j] = k.s [j] % IN_DIVISIONS;
+        }
+
+        cellrefpair.push_back ((CellRefPair) {i, keyForCell (outer, inner)});
+    }
+
+    //  sort
+
+    sort 
+    (   begin (cellrefpair)
+    ,   end (cellrefpair)
+    ,   [&] 
+        (   const CellRefPair & a
+        ,   const CellRefPair & b
+        ) 
+        { 
+            return a.cellID < b.cellID; 
+        }
+    );
+
+    vector <uint32_t> refids (cellrefpair.size());
+    transform 
+    (   begin (cellrefpair)
+    ,   end (cellrefpair)
+    ,   begin (refids)
+    ,   [&] (const CellRefPair & i)
+        {
+            return i.refID;
+        }
+    );
+
+    const uint32_t outermask = ((1 << (OUT_BITS * 3)) - 1) << (IN_BITS * 3);
+
+    vector <uint32_t> regionStarts (1, 0);
+    uint32_t currentcell = cellrefpair.front().cellID & outermask;
+    for (uint32_t i = 0; i != cellrefpair.size(); ++i)
+    {
+        uint32_t outercell = cellrefpair [i].cellID & outermask;
+        if (outercell != currentcell)
+        {
+            currentcell = outercell;
+            regionStarts.push_back (i);
+        }
+    }
+
+    //  At this point I got to the end of page 699 in the Garanzha paper and 
+    //  completely lost what was happening
+}

@@ -10,6 +10,8 @@
 #include <numeric>
 #include <iostream>
 
+struct aiScene;
+
 //  These definitions MUST be kept up-to-date with the defs in the cl file.
 //  It might make sense to nest them inside the Scene because I don't think
 //  other classes will need the same data formats.
@@ -64,6 +66,13 @@ typedef struct  {
 } _Speaker_unalign;
 
 typedef _Speaker_unalign __attribute__ ((aligned(8))) Speaker;
+
+typedef struct  {
+    cl_float3 min;
+    cl_float3 max;
+} _AABB_unalign;
+
+typedef _AABB_unalign __attribute__ ((aligned(8))) AABB;
 
 std::vector <cl_float3> flattenImpulses 
 (   const std::vector <Impulse> & impulse
@@ -127,6 +136,28 @@ inline void normalize (std::vector <T> & ret) throw()
 //  would happen in that case (though I'm sure it would be bad). Unlike copies,
 //  reinitializing the buffer on the host is not queued.
 
+struct SceneData
+{
+public:
+    SceneData (const std::string & objpath);
+
+    void populate (const aiScene * scene);
+    void populate (const std::string & objpath);
+
+    bool validSurfaces() const;
+    bool validTriangles() const;
+    bool valid() const;
+
+    inline std::vector <Triangle> & getTriangles();
+    inline std::vector <cl_float3> & getVertices();
+    inline std::vector <Surface> & getSurfaces();
+
+private:
+    std::vector <Triangle> triangles;
+    std::vector <cl_float3> vertices;
+    std::vector <Surface> surfaces;
+};
+
 class Scene
 {
 public:
@@ -137,6 +168,14 @@ public:
     ,   std::vector <Triangle> & triangles
     ,   std::vector <cl_float3> & vertices
     ,   std::vector <Surface> & surfaces
+    ,   bool verbose = false
+    );
+
+    Scene
+    (   cl::Context & cl_context
+    ,   unsigned long nreflections
+    ,   std::vector <cl_float3> & directions
+    ,   SceneData sceneData
     ,   bool verbose = false
     );
 
@@ -190,14 +229,38 @@ private:
     cl::Program cl_program;
 
     cl::CommandQueue queue;
+};
 
-    struct SceneData;
-
-    Scene
-    (   cl::Context & cl_context
-    ,   unsigned long nreflections
-    ,   std::vector <cl_float3> & directions
-    ,   SceneData sceneData
-    ,   bool verbose = false
+class BVH
+{
+public:
+    BVH
+    (   std::vector <Triangle> & triangles
+    ,   std::vector <cl_float3> & vertices
+    ,   std::vector <Surface> & surfaces
     );
+
+    BVH
+    (   SceneData sceneData
+    );
+
+    void build();
+
+    uint32_t keyForCell (const cl_uint3 & outer, const cl_uint3 & inner);
+    cl_uint3 outerCellForKey (uint32_t key);
+    cl_uint3 innerCellForKey (uint32_t key);
+
+    cl_uint3 grid0cell (const cl_float3 & pt, const AABB & aabb);
+
+private:
+    std::vector <Triangle> triangles;
+    std::vector <cl_float3> vertices;
+    std::vector <Surface> surfaces;
+
+    const unsigned long IN_BITS = 3;
+    const unsigned long OUT_BITS = 7;
+
+    const unsigned long IN_DIVISIONS = 1 << IN_BITS;
+
+    const unsigned long OUT_DIVISIONS = 1 << OUT_BITS;
 };

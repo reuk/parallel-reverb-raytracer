@@ -30,11 +30,16 @@ int main(int argc, const char * argv[])
     {
         cl::Context context = getContext();
 
+        SceneData sceneData (TEST_FILE);
+
+        BVH bvh (sceneData);
+        bvh.build();
+
         Scene scene 
         (   context
         ,   NUM_IMPULSES
         ,   directions
-        ,   TEST_FILE
+        ,   sceneData
         );
 
         scene.trace ((cl_float3) {-5, -5, -5, 0}, sphere);
