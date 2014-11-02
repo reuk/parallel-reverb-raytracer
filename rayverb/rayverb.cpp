@@ -35,7 +35,7 @@ struct LatestImpulse: public binary_function <Impulse, Impulse, bool>
 
 cl_float3 sum (const cl_float3 & a, const cl_float3 & b) throw()
 {
-    return (cl_float3) 
+    return (cl_float3)
     {   a.s [0] + b.s [0]
     ,   a.s [1] + b.s [1]
     ,   a.s [2] + b.s [2]
@@ -43,18 +43,18 @@ cl_float3 sum (const cl_float3 & a, const cl_float3 & b) throw()
     };
 }
 
-vector <cl_float3> flattenImpulses 
+vector <cl_float3> flattenImpulses
 (   const vector <Impulse> & impulse
 ,   float samplerate
 ) throw()
 {
-    const float MAX_TIME = max_element 
+    const float MAX_TIME = max_element
     (   begin (impulse)
     ,   end (impulse)
     ,   LatestImpulse()
     )->time;
     const unsigned long MAX_SAMPLE = round (MAX_TIME * samplerate);
-    
+
     vector <cl_float3> flattened (MAX_SAMPLE, (cl_float3) {0});
 
     for (const auto & i : impulse)
@@ -66,7 +66,7 @@ vector <cl_float3> flattenImpulses
     return flattened;
 }
 
-void lopass 
+void lopass
 (   vector <cl_float3> & data
 ,   float cutoff
 ,   float sr
@@ -80,7 +80,7 @@ void lopass
         i.s [index] = state += param * (i.s [index] - state);
 }
 
-void hipass 
+void hipass
 (   vector <cl_float3> & data
 ,   float cutoff
 ,   float sr
@@ -94,7 +94,7 @@ void hipass
         i.s [index] -= state += param * (i.s [index] - state);
 }
 
-void bandpass 
+void bandpass
 (   vector <cl_float3> & data
 ,   float lo
 ,   float hi
@@ -111,7 +111,7 @@ void filter (vector <cl_float3> & data, float lo, float hi, float sr) throw()
 #ifdef VECTORISE
     const float loParam = 1 - exp (-2 * M_PI * lo / sr);
     const float hiParam = 1 - exp (-2 * M_PI * hi / sr);
-    
+
     __m128 state = {0};
     __m128 params = {loParam, hiParam, loParam, hiParam};
 
@@ -121,7 +121,7 @@ void filter (vector <cl_float3> & data, float lo, float hi, float sr) throw()
         __m128 t0 = _mm_sub_ps (in, state);
         __m128 t1 = _mm_mul_ps (t0, params);
         state = _mm_add_ps (t1, state);
-        
+
         i.s [0] = state [0];
         i.s [1] = state [1];
         i.s [1] -= state [2];
@@ -158,33 +158,33 @@ vector <float> sum (const vector <cl_float3> & data) throw()
     return ret;
 }
 
-vector <vector <float>> process 
+vector <vector <float>> process
 (   vector <vector <cl_float3>> & data
 ,   float sr
 ) throw()
 {
     vector <vector <float>> ret (data.size());
-    
+
     for (int i = 0; i != data.size(); ++i)
     {
         filter (data [i], 200, 2000, sr);
         ret [i] = sum (data [i]);
         hipass (ret [i], 20, sr);
     }
-    
+
     normalize (ret);
-    
+
     return ret;
 }
 
-Scene::Scene 
+Scene::Scene
 (   cl::Context & cl_context
 ,   unsigned long nreflections
 ,   vector <cl_float3> & directions
 ,   vector <Triangle> & triangles
 ,   vector <cl_float3> & vertices
 ,   vector <Surface> & surfaces
-,   bool verbose 
+,   bool verbose
 )
 :   nrays (directions.size())
 ,   nreflections (nreflections)
@@ -195,19 +195,19 @@ Scene::Scene
 ,   cl_vertices   (cl_context, begin (vertices),   end (vertices),   false)
 ,   cl_surfaces   (cl_context, begin (surfaces),   end (surfaces),   false)
 ,   cl_sphere     (cl_context, CL_MEM_READ_WRITE, sizeof (Sphere))
-,   cl_impulses   
+,   cl_impulses
     (   cl_context
     ,   CL_MEM_READ_WRITE
     ,   directions.size() * nreflections * sizeof (Impulse)
     )
-,   cl_attenuated 
+,   cl_attenuated
     (   cl_context
     ,   CL_MEM_READ_WRITE
     ,   directions.size() * nreflections * sizeof (Impulse)
     )
 {
     ifstream cl_source_file ("kernel.cl");
-    string cl_source_string 
+    string cl_source_string
     (   (istreambuf_iterator <char> (cl_source_file))
     ,   istreambuf_iterator <char> ()
     );
@@ -217,12 +217,10 @@ Scene::Scene
     vector <cl::Device> device = cl_context.getInfo <CL_CONTEXT_DEVICES>();
 
     cl::Device used_device = device.back();
-    
-    /*
-    cerr 
-    <<  cl_program.getBuildInfo <CL_PROGRAM_BUILD_LOG> (used_device) 
-    << endl;
-    */
+
+    cerr
+    <<  cl_program.getBuildInfo <CL_PROGRAM_BUILD_LOG> (used_device)
+    <<  endl;
 
     queue = cl::CommandQueue (cl_context, used_device);
 }
@@ -239,29 +237,29 @@ public:
     {
         if (! scene)
             throw runtime_error ("Failed to load object file.");
-        
+
         for (unsigned long i = 0; i != scene->mNumMeshes; ++i)
         {
             const aiMesh * mesh = scene->mMeshes [i];
-            
+
             vector <cl_float3> meshVertices (mesh->mNumVertices);
-            
+
             for (unsigned long j = 0; j != mesh->mNumVertices; ++j)
             {
                 meshVertices [j] = fromAIVec (mesh->mVertices [j]);
             }
-            
+
 #ifdef USE_OBJECT_MATERIALS
-            const aiMaterial * material = scene->mMaterials 
+            const aiMaterial * material = scene->mMaterials
             [   mesh->mMaterialIndex
             ];
 
             aiColor3D diffuse (0.9, 0.8, 0.7);
             material->Get(AI_MATKEY_COLOR_DIFFUSE, diffuse);
-            
+
             aiColor3D specular (0.9, 0.8, 0.7);
             material->Get(AI_MATKEY_COLOR_SPECULAR, specular);
-            
+
             Surface surface = {
                 (cl_float3) {specular.r, specular.g, specular.b, 0},
                 (cl_float3) {diffuse.r, diffuse.g, diffuse.b, 0}
@@ -272,15 +270,15 @@ public:
                 (cl_float3) {0.95, 0.85, 0.75, 0}
             };
 #endif
-            
+
             surfaces.push_back (surface);
-            
+
             vector <Triangle> meshTriangles (mesh->mNumFaces);
-            
+
             for (unsigned long j = 0; j != mesh->mNumFaces; ++j)
             {
                 const aiFace face = mesh->mFaces [j];
-                
+
                 meshTriangles [j] = (Triangle) {
                     surfaces.size() - 1,
                     vertices.size() + face.mIndices [0],
@@ -288,14 +286,14 @@ public:
                     vertices.size() + face.mIndices [2]
                 };
             }
-                
-            vertices.insert 
+
+            vertices.insert
             (   vertices.end()
             ,   begin (meshVertices)
             ,   end (meshVertices)
             );
 
-            triangles.insert 
+            triangles.insert
             (   triangles.end()
             ,   begin (meshTriangles)
             ,   end (meshTriangles)
@@ -306,11 +304,11 @@ public:
     void populate (const std::string & objpath)
     {
         Assimp::Importer importer;
-        populate 
-        (   importer.ReadFile 
+        populate
+        (   importer.ReadFile
             (   objpath
-            ,   (   aiProcess_Triangulate 
-                |   aiProcess_GenSmoothNormals 
+            ,   (   aiProcess_Triangulate
+                |   aiProcess_GenSmoothNormals
                 |   aiProcess_FlipUVs
                 )
             )
@@ -323,7 +321,7 @@ public:
         {
             for (int i = 0; i != 3; ++i)
             {
-                if 
+                if
                 (   s.specular.s [i] < 0 || 1 < s.specular.s [i]
                 ||  s.diffuse.s [i] < 0 || 1 < s.diffuse.s [i]
                 )
@@ -338,7 +336,7 @@ public:
     {
         for (const Triangle & t : triangles)
         {
-            if 
+            if
             (   surfaces.size() <= t.surface
             ||  vertices.size() <= t.v0
             ||  vertices.size() <= t.v1
@@ -368,7 +366,7 @@ Scene::Scene
 ,   unsigned long nreflections
 ,   std::vector <cl_float3> & directions
 ,   SceneData sceneData
-,   bool verbose 
+,   bool verbose
 )
 :   Scene
 (   cl_context
@@ -386,7 +384,7 @@ Scene::Scene
 ,   unsigned long nreflections
 ,   std::vector <cl_float3> & directions
 ,   const std::string & objpath
-,   bool verbose 
+,   bool verbose
 )
 :   Scene
 (   cl_context
@@ -400,7 +398,7 @@ Scene::Scene
 #ifdef DIAGNOSTIC
 vector <Reflection> Scene::test (const cl_float3 & micpos, Sphere source)
 {
-    auto test = cl::make_kernel 
+    auto test = cl::make_kernel
     <   cl::Buffer
     ,   cl_float3
     ,   cl::Buffer
@@ -421,7 +419,7 @@ vector <Reflection> Scene::test (const cl_float3 & micpos, Sphere source)
     ,   cl_sphere
     );
 
-    cl_reflections = cl::Buffer 
+    cl_reflections = cl::Buffer
     (   cl_context
     ,   CL_MEM_READ_WRITE
     ,   nrays * nreflections * sizeof (Reflection)
@@ -442,7 +440,7 @@ vector <Reflection> Scene::test (const cl_float3 & micpos, Sphere source)
 
     vector <Reflection> reflections (nrays * nreflections);
 
-    cl::copy 
+    cl::copy
     (   queue
     ,   cl_reflections
     ,   begin (reflections)
@@ -455,7 +453,7 @@ vector <Reflection> Scene::test (const cl_float3 & micpos, Sphere source)
 
 void Scene::trace (const cl_float3 & micpos, Sphere source)
 {
-    auto raytrace = cl::make_kernel 
+    auto raytrace = cl::make_kernel
     <   cl::Buffer
     ,   cl_float3
     ,   cl::Buffer
@@ -476,7 +474,7 @@ void Scene::trace (const cl_float3 & micpos, Sphere source)
     ,   cl_sphere
     );
 
-    raytrace 
+    raytrace
     (   cl::EnqueueArgs (queue, cl::NDRange (nrays))
     ,   cl_directions
     ,   micpos
@@ -492,7 +490,7 @@ void Scene::trace (const cl_float3 & micpos, Sphere source)
 
 vector <Impulse> Scene::attenuate (const Speaker & speaker)
 {
-    auto attenuate = cl::make_kernel 
+    auto attenuate = cl::make_kernel
     <   cl::Buffer
     ,   cl::Buffer
     ,   unsigned long
@@ -500,7 +498,7 @@ vector <Impulse> Scene::attenuate (const Speaker & speaker)
     ,   Speaker
     > (cl_program, "attenuate");
 
-    attenuate 
+    attenuate
     (   cl::EnqueueArgs (queue, cl::NDRange (nrays))
     ,   cl_impulses
     ,   cl_attenuated
@@ -511,7 +509,7 @@ vector <Impulse> Scene::attenuate (const Speaker & speaker)
 
     vector <Impulse> attenuated (nreflections * nrays);
 
-    cl::copy 
+    cl::copy
     (   queue
     ,   cl_attenuated
     ,   begin (attenuated)

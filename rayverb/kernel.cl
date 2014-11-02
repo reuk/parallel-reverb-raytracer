@@ -52,6 +52,55 @@ typedef struct {
     float coefficient;
 } Speaker;
 
+//  function defs
+
+float triangle_intersection
+(   global Triangle * triangle
+,   global float3 * vertices
+,   Ray * ray
+);
+
+float3 triangle_normal
+(   global Triangle * triangle
+,   global float3 * vertices
+);
+
+float3 reflect (float3 normal, float3 direction);
+
+Ray ray_reflect (Ray * ray, float3 normal, float3 intersection);
+
+Ray triangle_reflectAt
+(   global Triangle * triangle
+,   global float3 * vertices
+,   Ray * ray
+,   float3 intersection
+);
+
+float sphere_intersection (global Sphere * sphere, Ray * ray);
+
+Intersection ray_triangle_intersection
+(   Ray * ray
+,   global Triangle * triangles
+,   unsigned long numtriangles
+,   global float3 * vertices
+);
+
+Intersection ray_sphere_intersection (Ray * ray, global Sphere * sphere);
+
+bool anyAbove (float3 in, float thresh);
+
+Intersection ray_intersection
+(   Ray * ray
+,   global Sphere * sphere
+,   global Triangle * triangles
+,   unsigned long numtriangles
+,   global float3 * vertices
+);
+
+void test_value (global Impulse * impulse, float f);
+
+float speaker_attenuation (Speaker * speaker, float3 direction);
+
 //  implementations
 
 float triangle_intersection (global Triangle * triangle,
@@ -69,20 +118,20 @@ float triangle_intersection (global Triangle * triangle,
 
     if (-EPSILON < det && det < EPSILON)
         return 0.0f;
-    
+
     float invdet = 1.0f / det;
     float3 tvec = ray->position - v0;
     float ucomp = invdet * dot (tvec, pvec);
-    
+
     if (ucomp < 0.0f || 1.0f < ucomp)
         return 0.0f;
-    
+
     float3 qvec = cross (tvec, e0);
     float vcomp = invdet * dot (ray->direction, qvec);
-    
+
     if (vcomp < 0.0f || 1.0f < vcomp + ucomp)
         return 0.0f;
-    
+
     return invdet * dot (e1, qvec);
 }
 
@@ -94,7 +143,7 @@ float3 triangle_normal (global Triangle * triangle,
     float3 v2 = vertices [triangle->v2];
     float3 e0 = v1 - v0;
     float3 e1 = v2 - v0;
-    
+
     return normalize (cross (e0, e1));
 }
 
@@ -124,14 +173,14 @@ float sphere_intersection (global Sphere * sphere, Ray * ray)
     float a_comp = dot (ray->direction, ray->direction);
     float b_comp = 2 * dot (ray->direction, sub);
     float c_comp = dot (sub, sub) - pow (sphere->radius, 2);
-    
+
     float disc = (b_comp * b_comp) - (4 * a_comp * c_comp);
-    
+
     float ret = 0;
-    
+
     if (disc > 0)
         ret = -(b_comp + sqrt (disc)) / (2 * a_comp);
-    
+
     return ret;
 }
 
@@ -141,7 +190,7 @@ Intersection ray_triangle_intersection (Ray * ray,
                                         global float3 * vertices)
 {
     Intersection ret = {NULL, 0};
-    
+
     for (unsigned long i = 0; i != numtriangles; ++i)
     {
         global Triangle * thisTriangle = triangles + i;
@@ -153,7 +202,7 @@ Intersection ray_triangle_intersection (Ray * ray,
             ret = (Intersection) {thisTriangle, distance};
         }
     }
-    
+
     return ret;
 }
 
@@ -177,7 +226,7 @@ bool anyAbove (float3 in, float thresh)
             return true;
         }
     }
-    
+
     return false;
 }
 
@@ -186,13 +235,13 @@ Intersection ray_intersection (Ray * ray,
                                global Triangle * triangles,
                                unsigned long numtriangles,
                                global float3 * vertices)
-{    
+{
     Intersection si = ray_sphere_intersection (ray, sphere);
     Intersection ti = ray_triangle_intersection (ray,
                                                  triangles,
                                                  numtriangles,
                                                  vertices);
-    
+
     if (si.primitive && ti.primitive)
         return si.distance < ti.distance ? si : ti;
     else if (si.primitive)
@@ -208,7 +257,7 @@ void test_value (global Impulse * impulse, float f)
     *impulse = (Impulse) {(float3) (f), f};
 }
 
-kernel void test 
+kernel void test
 (   global float3 * directions
 ,   float3 position
 ,   global Triangle * triangles
@@ -221,7 +270,7 @@ kernel void test
 )
 {
     size_t i = get_global_id (0);
-    
+
     Ray ray = {position, directions [i]};
     float distance = 0;
     float3 volume = 1;
@@ -234,17 +283,17 @@ kernel void test
                                                  triangles,
                                                  numtriangles,
                                                  vertices);
-        
+
         if (closest.primitive == NULL)
         {
             break;
         }
-        
+
         if (closest.primitive == sphere)
         {
             break;
         }
-        
+
         float3 intersection = ray.position + ray.direction * closest.distance;
 
         float newDist = distance + closest.distance;
@@ -261,15 +310,15 @@ kernel void test
         };
 
         float3 direction = normalize (sphere->origin - reflection.position);
-        
+
         Ray toSource = {intersection, direction};
-        
+
         Intersection inter = ray_intersection (&toSource,
                                                sphere,
                                                triangles,
                                                numtriangles,
                                                vertices);
-        
+
         if (inter.primitive == sphere)
         {
             reflections [i * outputOffset + index] = reflection;
@@ -285,7 +334,7 @@ kernel void test
     }
 }
 
-kernel void raytrace 
+kernel void raytrace
 (   global float3 * directions
 ,   float3 position
 ,   global Triangle * triangles
@@ -298,7 +347,7 @@ kernel void raytrace
 )
 {
     size_t i = get_global_id (0);
-    
+
     Ray ray = {position, directions [i]};
     float distance = 0;
     float3 volume = 1;
@@ -311,23 +360,23 @@ kernel void raytrace
                                                  triangles,
                                                  numtriangles,
                                                  vertices);
-        
+
         if (closest.primitive == NULL)
         {
             break;
         }
-        
+
         if (closest.primitive == sphere)
         {
             float newDist = distance + closest.distance;
-            
+
             Impulse impulse = {volume, SECONDS_PER_METER * newDist};
             impulses [i * outputOffset + index] = impulse;
-            
+
             break;
         }
-        
-        
+
+
         float3 intersection = ray.position + ray.direction * closest.distance;
 
         float newDist = distance + closest.distance;
@@ -344,26 +393,26 @@ kernel void raytrace
         };
 
         float3 direction = normalize (sphere->origin - reflection.position);
-        
+
         Ray toSource = {intersection, direction};
-        
+
         Intersection inter = ray_intersection (&toSource,
                                                sphere,
                                                triangles,
                                                numtriangles,
                                                vertices);
-        
+
         if (inter.primitive == sphere)
         {
-            const float time = 
-            (   SECONDS_PER_METER 
-            *   (   reflection.distance 
+            const float time =
+            (   SECONDS_PER_METER
+            *   (   reflection.distance
                 +   inter.distance
                 )
             );
-            const float3 volume = 
-            (   reflection.volume 
-            *   surfaces [reflection.surface].diffuse 
+            const float3 volume =
+            (   reflection.volume
+            *   surfaces [reflection.surface].diffuse
             *   dot (reflection.normal, direction)
             );
             impulses [i * outputOffset + index] = (Impulse) {volume, time};
@@ -371,7 +420,7 @@ kernel void raytrace
             ++index;
         }
 
-        Ray newRay = triangle_reflectAt 
+        Ray newRay = triangle_reflectAt
         (   triangle
         ,   vertices
         ,   &ray
