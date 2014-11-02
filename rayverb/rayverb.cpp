@@ -129,6 +129,7 @@ vector <float> dconvolve (const vector <float> & a, vector <float> & b)
     {
         const float in = a [i];
         if (in != 0)
+        {
 #ifdef VECTORISE
             __m128 four = {in, in, in, in};
 #endif
@@ -146,6 +147,7 @@ vector <float> dconvolve (const vector <float> & a, vector <float> & b)
                 ret [i + j] += in * b [j];
 #endif
             }
+        }
     }
 
     return ret;

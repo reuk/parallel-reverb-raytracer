@@ -1,0 +1,3 @@
+[submodule "libconv"]
+	path = libconv
+	url = /Users/reuben/dev/parallel_raytrace/../libconv
