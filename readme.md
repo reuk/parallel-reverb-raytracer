@@ -47,7 +47,7 @@ done
 * Modify the .obj so that it has proper materials.
     * The .obj has an accompanying .mtl which contains material defs
     * You can modify this by hand to use the correct materials
-    * Just make sure you have MATCHING materials where you need them when 
+    * Just make sure you have MATCHING materials where you need them when
       building the .obj
     * Then modify them yourself after exporting
 
@@ -69,3 +69,4 @@ to think about
 
 * As long as I queue everything, I should be able to do other stuff on the main
   thread, and just block whenever I need to get a new ir from the generator.
+
