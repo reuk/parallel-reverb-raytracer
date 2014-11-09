@@ -35,14 +35,25 @@ struct LatestImpulse: binary_function <Impulse, Impulse, bool>
     }
 };
 
-cl_float3 sum (const cl_float3 & a, const cl_float3 & b) throw()
+template<>
+struct plus <cl_float3>
+:   public binary_function <cl_float3, cl_float3, cl_float3>
 {
-    return (cl_float3)
-    {   a.s [0] + b.s [0]
-    ,   a.s [1] + b.s [1]
-    ,   a.s [2] + b.s [2]
-    ,   0
-    };
+    inline cl_float3 operator() (const cl_float3 & a, const cl_float3 & b) const
+    {
+        return (cl_float3)
+        {   a.s [0] + b.s [0]
+        ,   a.s [1] + b.s [1]
+        ,   a.s [2] + b.s [2]
+        ,   0
+        };
+    }
+};
+
+template <typename T>
+inline T sum (const T & a, const T & b)
+{
+    return plus <T>() (a, b);
 }
 
 std::vector <float> flattenCustomReflectionLevel
@@ -205,7 +216,7 @@ vector <cl_float3> flattenImpulses
     ,   [&] (const Impulse & i)
         {
             const unsigned long SAMPLE = round (i.time * samplerate);
-            flattened [SAMPLE] = sum (flattened [SAMPLE], i.volume);
+            flattened [SAMPLE] =  (flattened [SAMPLE], i.volume);
         }
     );
 
@@ -282,10 +293,11 @@ void hipass (vector <float> & data, float lo, float sr) throw()
 vector <float> sum (const vector <cl_float3> & data) throw()
 {
     vector <float> ret (data.size());
-    for (unsigned long i = 0; i != data.size(); ++i)
-    {
-        ret [i] = accumulate (data [i].s, data[i].s + 3, 0.0);
-    }
+    transform
+    (   begin (data)
+    ,   end (data)
+    ,   [&] (const cl_float3 & i) {return accumulate (i.s, i.s + 3, 0.0);}
+    );
     return ret;
 }
 
