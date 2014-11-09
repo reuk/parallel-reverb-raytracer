@@ -33,14 +33,25 @@ struct LatestImpulse: public binary_function <Impulse, Impulse, bool>
     }
 };
 
-cl_float3 sum (const cl_float3 & a, const cl_float3 & b) throw()
+template<>
+struct plus <cl_float3>
+:   public binary_function <cl_float3, cl_float3, cl_float3>
 {
-    return (cl_float3)
-    {   a.s [0] + b.s [0]
-    ,   a.s [1] + b.s [1]
-    ,   a.s [2] + b.s [2]
-    ,   0
-    };
+    inline cl_float3 operator() (const cl_float3 & a, const cl_float3 & b)
+    {
+        return (cl_float3)
+        {   a.s [0] + b.s [0]
+        ,   a.s [1] + b.s [1]
+        ,   a.s [2] + b.s [2]
+        ,   0
+        };
+    }
+};
+
+template <typename T>
+inline T sum (const T & a, const T & b)
+{
+    return plus <T>() (a, b);
 }
 
 vector <cl_float3> flattenImpulses
@@ -143,18 +154,15 @@ void hipass (vector <float> & data, float lo, float sr) throw()
         i -= loState += loParam * (i - loState);
 }
 
-struct Sum: public unary_function <cl_float3, float>
-{
-    inline float operator() (const cl_float3 & i) const
-    {
-        return accumulate (i.s, i.s + 3, 0.0);
-    }
-};
-
 vector <float> sum (const vector <cl_float3> & data) throw()
 {
     vector <float> ret (data.size());
-    transform (begin (data), end (data), begin (ret), Sum());
+    transform
+    (   begin (data)
+    ,   end (data)
+    ,   begin (ret)
+    ,   [&] (const cl_float3 & i) {return accumulate (i.s, i.s + 3, 0.0);}
+    );
     return ret;
 }
 
