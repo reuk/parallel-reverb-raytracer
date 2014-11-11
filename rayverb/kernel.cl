@@ -183,14 +183,14 @@ bool anyAbove (VolumeType in, float thresh)
 }
 
 constant VolumeType AIR_COEFFICIENT =
-{   -0.01
-,   -0.02
-,   -0.04
-,   -0.08
-,   -0.16
-,   -0.32
-,   -0.64
-,   -1.28
+{   0.001 * -0.1
+,   0.001 * -0.2
+,   0.001 * -0.5
+,   0.001 * -1.1
+,   0.001 * -2.7
+,   0.001 * -9.4
+,   0.001 * -29.0
+,   0.001 * -60.0
 };
 
 VolumeType attenuation_for_distance (float distance);
@@ -219,7 +219,7 @@ kernel void raytrace
 
     for
     (   unsigned long index = 0
-    ;   anyAbove (volume, THRESHOLD) && index != outputOffset
+    ;   /*anyAbove (volume, THRESHOLD) && */index != outputOffset
     ;   ++index
     )
     {
@@ -265,11 +265,19 @@ kernel void raytrace
         {
             const float DIST = reflection.distance + inter.distance;
             const float TIME = SECONDS_PER_METER * DIST;
-            impulses [i * outputOffset + index] = (Impulse)
-            {   volume * attenuation_for_distance (DIST)
-            ,   -direction
-            ,   TIME
-            };
+            const float DIFF = dot (reflection.normal, -direction);
+            if (DIFF > 0)
+            {
+                impulses [i * outputOffset + index] = (Impulse)
+                {   (   volume
+                    *   attenuation_for_distance (DIST)
+                    *   surfaces [reflection.surface].diffuse
+                    *   DIFF
+                    )
+                ,   -direction
+                ,   TIME
+                };
+            }
         }
 
         Ray newRay = triangle_reflectAt
