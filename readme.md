@@ -1,7 +1,7 @@
 parallel raytrace
 =================
 
-A raytracer for impulse responses (for reverb), influenced by raster graphics 
+A raytracer for impulse responses (for reverb), influenced by raster graphics
 lighting techniques. Uses OpenCL for IMMENSE SPEED.
 
 to do
@@ -47,7 +47,7 @@ done
 * Modify the .obj so that it has proper materials.
     * The .obj has an accompanying .mtl which contains material defs
     * You can modify this by hand to use the correct materials
-    * Just make sure you have MATCHING materials where you need them when 
+    * Just make sure you have MATCHING materials where you need them when
       building the .obj
     * Then modify them yourself after exporting
 

@@ -16,6 +16,8 @@
 //
 //  Unless I have a new class/kernel for constructing BVHs?
 
+typedef cl_float8 VolumeType;
+
 typedef struct  {
     cl_ulong surface;
     cl_ulong v0;
@@ -26,15 +28,8 @@ typedef struct  {
 typedef _Triangle_unalign __attribute__ ((aligned(8))) Triangle;
 
 typedef struct  {
-    cl_float3 origin;
-    cl_float radius;
-} _Sphere_unalign;
-
-typedef _Sphere_unalign __attribute__ ((aligned(8))) Sphere;
-
-typedef struct  {
-    cl_float3 specular;
-    cl_float3 diffuse;
+    VolumeType specular;
+    VolumeType diffuse;
 } _Surface_unalign;
 
 typedef _Surface_unalign __attribute__ ((aligned(8))) Surface;
@@ -44,7 +39,7 @@ typedef struct {
     cl_ulong surface;
     cl_float3 position;
     cl_float3 normal;
-    cl_float3 volume;
+    VolumeType volume;
     cl_float distance;
 } _Reflection_unalign;
 
@@ -52,7 +47,8 @@ typedef _Reflection_unalign __attribute__ ((aligned(8))) Reflection;
 #endif
 
 typedef struct  {
-    cl_float3 volume;
+    VolumeType volume;
+    cl_float3 direction;
     cl_float time;
 } _Impulse_unalign;
 
@@ -65,13 +61,13 @@ typedef struct  {
 
 typedef _Speaker_unalign __attribute__ ((aligned(8))) Speaker;
 
-std::vector <cl_float3> flattenImpulses 
+std::vector <VolumeType> flattenImpulses
 (   const std::vector <Impulse> & impulse
 ,   float samplerate
 ) throw();
 
-std::vector <std::vector <float>> process 
-(   std::vector <std::vector <cl_float3>> & data
+std::vector <std::vector <float>> process
+(   std::vector <std::vector <VolumeType>> & data
 ,   float samplerate
 ) throw();
 
@@ -81,14 +77,14 @@ inline float max_amp (const std::vector <T> & ret) throw();
 template <typename T>
 struct FabsMax: public std::binary_function <float, T, float>
 {
-    inline float operator() (float a, T b) const throw() 
+    inline float operator() (float a, T b) const throw()
         { return std::max (a, max_amp (b)); }
 };
 
 template<>
 struct FabsMax <float>: public std::binary_function <float, float, float>
 {
-    inline float operator() (float a, float b) const throw() 
+    inline float operator() (float a, float b) const throw()
         { return std::max (a, std::fabs (b)); }
 };
 
@@ -130,7 +126,7 @@ inline void normalize (std::vector <T> & ret) throw()
 class Scene
 {
 public:
-    Scene 
+    Scene
     (   cl::Context & cl_context
     ,   unsigned long nreflections
     ,   std::vector <cl_float3> & directions
@@ -151,18 +147,18 @@ public:
 #ifdef DIAGNOSTIC
     std::vector <Reflection> test
     (   const cl_float3 & micpos
-    ,   Sphere source
+    ,   const cl_float3 & source
     );
 #endif
 
     void trace
     (   const cl_float3 & micpos
-    ,   Sphere source
+    ,   const cl_float3 & source
     );
 
     std::vector <Impulse> attenuate (const Speaker & speaker);
 
-    std::vector <std::vector <Impulse>>  attenuate 
+    std::vector <std::vector <Impulse>>  attenuate
     (   const std::vector <Speaker> & speakers
     );
 
@@ -181,8 +177,6 @@ private:
 #ifdef DIAGNOSTIC
     cl::Buffer cl_reflections;
 #endif
-
-    cl::Buffer cl_sphere;
 
     cl::Buffer cl_impulses;
     cl::Buffer cl_attenuated;

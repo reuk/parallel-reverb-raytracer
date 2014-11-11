@@ -6,7 +6,7 @@ make
 cd bin
 if ./tests ; then
     echo "Tests succeeded!"
-    ./parallel_raytrace | tee out.dump
+    CL_LOG_ERRORS=stdout time ./parallel_raytrace | tee out.dump
 else
     echo "Tests failed. Skipping running the raytracer."
 fi

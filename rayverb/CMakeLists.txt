@@ -23,4 +23,5 @@ target_link_libraries(${name} ${libraries})
 
 file(COPY
     ${CMAKE_CURRENT_SOURCE_DIR}/kernel.cl
+    ${CMAKE_CURRENT_SOURCE_DIR}/kernel_m2.cl
     DESTINATION ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})

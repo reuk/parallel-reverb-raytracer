@@ -16,7 +16,7 @@
 #include <streambuf>
 #include <iostream>
 
-#define USE_OBJECT_MATERIALS
+//#define USE_OBJECT_MATERIALS
 
 using namespace std;
 
@@ -43,7 +43,26 @@ struct plus <cl_float3>
         {   a.s [0] + b.s [0]
         ,   a.s [1] + b.s [1]
         ,   a.s [2] + b.s [2]
-        ,   0
+        ,   a.s [3] + b.s [3]
+        };
+    }
+};
+
+template<>
+struct plus <cl_float8>
+:   public binary_function <cl_float8, cl_float8, cl_float8>
+{
+    inline cl_float8 operator() (const cl_float8 & a, const cl_float8 & b)
+    {
+        return (cl_float8)
+        {   a.s [0] + b.s [0]
+        ,   a.s [1] + b.s [1]
+        ,   a.s [2] + b.s [2]
+        ,   a.s [3] + b.s [3]
+        ,   a.s [4] + b.s [4]
+        ,   a.s [5] + b.s [5]
+        ,   a.s [6] + b.s [6]
+        ,   a.s [7] + b.s [7]
         };
     }
 };
@@ -54,7 +73,7 @@ inline T sum (const T & a, const T & b)
     return plus <T>() (a, b);
 }
 
-vector <cl_float3> flattenImpulses
+vector <VolumeType> flattenImpulses
 (   const vector <Impulse> & impulse
 ,   float samplerate
 ) throw()
@@ -64,9 +83,9 @@ vector <cl_float3> flattenImpulses
     ,   end (impulse)
     ,   LatestImpulse()
     )->time;
-    const unsigned long MAX_SAMPLE = round (MAX_TIME * samplerate);
+    const unsigned long MAX_SAMPLE = round (MAX_TIME * samplerate) + 1;
 
-    vector <cl_float3> flattened (MAX_SAMPLE, (cl_float3) {0});
+    vector <VolumeType> flattened (MAX_SAMPLE, (VolumeType) {0});
 
     for (const auto & i : impulse)
     {
@@ -77,8 +96,9 @@ vector <cl_float3> flattenImpulses
     return flattened;
 }
 
+template <typename T>
 void lopass
-(   vector <cl_float3> & data
+(   vector <T> & data
 ,   float cutoff
 ,   float sr
 ,   int index
@@ -91,8 +111,9 @@ void lopass
         i.s [index] = state += param * (i.s [index] - state);
 }
 
+template <typename T>
 void hipass
-(   vector <cl_float3> & data
+(   vector <T> & data
 ,   float cutoff
 ,   float sr
 ,   int index
@@ -105,8 +126,9 @@ void hipass
         i.s [index] -= state += param * (i.s [index] - state);
 }
 
+template <typename T>
 void bandpass
-(   vector <cl_float3> & data
+(   vector <T> & data
 ,   float lo
 ,   float hi
 ,   float sr
@@ -145,6 +167,28 @@ void filter (vector <cl_float3> & data, float lo, float hi, float sr) throw()
 #endif
 }
 
+void filter
+(   vector <cl_float8> & data
+,   float b0
+,   float b1
+,   float b2
+,   float b3
+,   float b4
+,   float b5
+,   float b6
+,   float sr
+)   throw()
+{
+    //  could speed this up somehow?
+    bandpass (data,  0, b1, sr, 0);
+    bandpass (data, b0, b2, sr, 1);
+    bandpass (data, b1, b3, sr, 2);
+    bandpass (data, b2, b4, sr, 3);
+    bandpass (data, b3, b5, sr, 4);
+    bandpass (data, b4, b6, sr, 5);
+    bandpass (data, b5, 20000, sr, 6);
+}
+
 void hipass (vector <float> & data, float lo, float sr) throw()
 {
     const float loParam = 1 - exp (-2 * M_PI * lo / sr);
@@ -154,20 +198,24 @@ void hipass (vector <float> & data, float lo, float sr) throw()
         i -= loState += loParam * (i - loState);
 }
 
-vector <float> sum (const vector <cl_float3> & data) throw()
+template <typename T>
+vector <float> sum (const vector <T> & data) throw()
 {
     vector <float> ret (data.size());
     transform
     (   begin (data)
     ,   end (data)
     ,   begin (ret)
-    ,   [&] (const cl_float3 & i) {return accumulate (i.s, i.s + 3, 0.0);}
+    ,   [&] (const T & i)
+        {
+            return accumulate (i.s, i.s + sizeof (T) / sizeof (float), 0.0);
+        }
     );
     return ret;
 }
 
 vector <vector <float>> process
-(   vector <vector <cl_float3>> & data
+(   vector <vector <VolumeType>> & data
 ,   float sr
 ) throw()
 {
@@ -175,7 +223,8 @@ vector <vector <float>> process
 
     for (int i = 0; i != data.size(); ++i)
     {
-        filter (data [i], 200, 2000, sr);
+        //filter (data [i], 200, 2000, sr);
+        filter (data [i], 125, 250, 500, 1000, 2000, 4000, 8000, sr);
         ret [i] = sum (data [i]);
         hipass (ret [i], 20, sr);
     }
@@ -202,7 +251,6 @@ Scene::Scene
 ,   cl_triangles  (cl_context, begin (triangles),  end (triangles),  false)
 ,   cl_vertices   (cl_context, begin (vertices),   end (vertices),   false)
 ,   cl_surfaces   (cl_context, begin (surfaces),   end (surfaces),   false)
-,   cl_sphere     (cl_context, CL_MEM_READ_WRITE, sizeof (Sphere))
 ,   cl_impulses
     (   cl_context
     ,   CL_MEM_READ_WRITE
@@ -214,17 +262,19 @@ Scene::Scene
     ,   directions.size() * nreflections * sizeof (Impulse)
     )
 {
-    ifstream cl_source_file ("kernel.cl");
+    ifstream cl_source_file ("kernel_m2.cl");
     string cl_source_string
     (   (istreambuf_iterator <char> (cl_source_file))
     ,   istreambuf_iterator <char> ()
     );
 
-    cl_program = cl::Program (cl_context, cl_source_string, true);
+    cl_program = cl::Program (cl_context, cl_source_string, false);
 
     vector <cl::Device> device = cl_context.getInfo <CL_CONTEXT_DEVICES>();
+    vector <cl::Device> used_devices (device.end() - 1, device.end());
 
-    cl::Device used_device = device.back();
+    cl_program.build (used_devices);
+    cl::Device used_device = used_devices.front();
 
     cerr
     <<  cl_program.getBuildInfo <CL_PROGRAM_BUILD_LOG> (used_device)
@@ -274,8 +324,8 @@ public:
             };
 #else
             Surface surface = {
-                (cl_float3) {0.95, 0.85, 0.75, 0},
-                (cl_float3) {0.95, 0.85, 0.75, 0}
+                (VolumeType) {0.98, 0.98, 0.97, 0.97, 0.96, 0.95, 0.95, 0.00},
+                (VolumeType) {0.50, 0.90, 0.95, 0.95, 0.95, 0.95, 0.95, 0.00}
             };
 #endif
 
@@ -404,7 +454,10 @@ Scene::Scene
 }
 
 #ifdef DIAGNOSTIC
-vector <Reflection> Scene::test (const cl_float3 & micpos, Sphere source)
+vector <Reflection> Scene::test
+(   const cl_float3 & micpos
+,   const cl_float3 & source
+)
 {
     auto test = cl::make_kernel
     <   cl::Buffer
@@ -417,15 +470,6 @@ vector <Reflection> Scene::test (const cl_float3 & micpos, Sphere source)
     ,   cl::Buffer
     ,   unsigned long
     > (cl_program, "test");
-
-    Sphere * sp = &source;
-
-    cl::copy
-    (   queue
-    ,   sp
-    ,   sp + 1
-    ,   cl_sphere
-    );
 
     cl_reflections = cl::Buffer
     (   cl_context
@@ -440,7 +484,7 @@ vector <Reflection> Scene::test (const cl_float3 & micpos, Sphere source)
     ,   cl_triangles
     ,   ntriangles
     ,   cl_vertices
-    ,   cl_sphere
+    ,   source
     ,   cl_surfaces
     ,   cl_reflections
     ,   nreflections
@@ -459,28 +503,19 @@ vector <Reflection> Scene::test (const cl_float3 & micpos, Sphere source)
 }
 #endif
 
-void Scene::trace (const cl_float3 & micpos, Sphere source)
+void Scene::trace (const cl_float3 & micpos, const cl_float3 & source)
 {
     auto raytrace = cl::make_kernel
     <   cl::Buffer
     ,   cl_float3
     ,   cl::Buffer
-    ,   unsigned long
+    ,   cl_ulong
+    ,   cl::Buffer
+    ,   cl_float3
     ,   cl::Buffer
     ,   cl::Buffer
-    ,   cl::Buffer
-    ,   cl::Buffer
-    ,   unsigned long
+    ,   cl_ulong
     > (cl_program, "raytrace");
-
-    Sphere * sp = &source;
-
-    cl::copy
-    (   queue
-    ,   sp
-    ,   sp + 1
-    ,   cl_sphere
-    );
 
     raytrace
     (   cl::EnqueueArgs (queue, cl::NDRange (nrays))
@@ -489,7 +524,7 @@ void Scene::trace (const cl_float3 & micpos, Sphere source)
     ,   cl_triangles
     ,   ntriangles
     ,   cl_vertices
-    ,   cl_sphere
+    ,   source
     ,   cl_surfaces
     ,   cl_impulses
     ,   nreflections
@@ -501,8 +536,7 @@ vector <Impulse> Scene::attenuate (const Speaker & speaker)
     auto attenuate = cl::make_kernel
     <   cl::Buffer
     ,   cl::Buffer
-    ,   unsigned long
-    ,   cl::Buffer
+    ,   cl_ulong
     ,   Speaker
     > (cl_program, "attenuate");
 
@@ -511,7 +545,6 @@ vector <Impulse> Scene::attenuate (const Speaker & speaker)
     ,   cl_impulses
     ,   cl_attenuated
     ,   nreflections
-    ,   cl_directions
     ,   speaker
     );
 
@@ -529,9 +562,13 @@ vector <Impulse> Scene::attenuate (const Speaker & speaker)
 
 vector <vector <Impulse>> Scene::attenuate (const vector <Speaker> & speakers)
 {
-    vector <vector <Impulse>> attenuated;
-    for (const Speaker & s : speakers)
-        attenuated.push_back (attenuate (s));
+    vector <vector <Impulse>> attenuated (speakers.size());
+    transform
+    (   begin (speakers)
+    ,   end (speakers)
+    ,   begin (attenuated)
+    ,   [&] (const Speaker & i) {return attenuate (i);}
+    );
     return attenuated;
 }
 

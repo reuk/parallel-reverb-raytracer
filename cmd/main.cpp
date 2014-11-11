@@ -13,13 +13,14 @@ using namespace std;
 
 int main(int argc, const char * argv[])
 {
-    Sphere sphere = {(cl_float3) {5, 5, 5, 0}, 1};
+    cl_float3 source = {5, 5, 5, 0};
+    cl_float3 mic = {-5, -5, -5, 0};
 
-    vector <Speaker> speakers 
+    vector <Speaker> speakers
     {   (Speaker) {(cl_float3) {1, 0, 0}, 0.5}
     ,   (Speaker) {(cl_float3) {0, 1, 0}, 0.5}
     };
-    
+
     const unsigned long NUM_RAYS = 1024 * 32;
     const unsigned long NUM_IMPULSES = 128;
 
@@ -30,14 +31,14 @@ int main(int argc, const char * argv[])
     {
         cl::Context context = getContext();
 
-        Scene scene 
+        Scene scene
         (   context
         ,   NUM_IMPULSES
         ,   directions
         ,   TEST_FILE
         );
 
-        scene.trace ((cl_float3) {-5, -5, -5, 0}, sphere);
+        scene.trace (mic, source);
 
         attenuated = scene.attenuate (speakers);
     }
@@ -60,19 +61,26 @@ int main(int argc, const char * argv[])
     }
 
     const float SAMPLE_RATE = 44100;
-    vector <vector <cl_float3>> flattened;
-    for (const auto & i : attenuated)
-        flattened.push_back (flattenImpulses (i, SAMPLE_RATE));
-    
+    vector <vector <VolumeType>> flattened (attenuated.size());
+    transform
+    (   begin (attenuated)
+    ,   end (attenuated)
+    ,   begin (flattened)
+    ,   [&] (const vector <Impulse> & i)
+        {
+            return flattenImpulses (i, SAMPLE_RATE);
+        }
+    );
+
     vector <vector <float>> outdata = process (flattened, SAMPLE_RATE);
-    
+
     vector <float> interleaved (outdata.size() * outdata [0].size());
-    
+
     for (int i = 0; i != outdata.size(); ++i)
         for (int j = 0; j != outdata [i].size(); ++j)
             interleaved [j * outdata.size() + i] = outdata [i] [j];
-    
-    SndfileHandle outfile 
+
+    SndfileHandle outfile
     (   "para.aiff"
     ,   SFM_WRITE
     ,   SF_FORMAT_AIFF | SF_FORMAT_PCM_16
