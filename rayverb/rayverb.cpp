@@ -262,7 +262,7 @@ Scene::Scene
     ,   directions.size() * nreflections * sizeof (Impulse)
     )
 {
-    ifstream cl_source_file ("kernel_m2.cl");
+    ifstream cl_source_file ("kernel.cl");
     string cl_source_string
     (   (istreambuf_iterator <char> (cl_source_file))
     ,   istreambuf_iterator <char> ()
