@@ -10,6 +10,11 @@
 #include <numeric>
 #include <iostream>
 
+std::vector <float> lopassKernel (float sr, float cutoff, unsigned long length);
+std::vector <float> hipassKernel (float sr, float cutoff, unsigned long length);
+std::vector <float> bandpassKernel (float sr, float lo, float hi, unsigned long l);
+std::vector <float> fastConvolve (const std::vector <float> & a, const std::vector <float> & b);
+
 //  These definitions MUST be kept up-to-date with the defs in the cl file.
 //  It might make sense to nest them inside the Scene because I don't think
 //  other classes will need the same data formats.

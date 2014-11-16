@@ -17,7 +17,7 @@ find_library(opencl_library OpenCL)
 mark_as_advanced(opencl_library)
 set(frameworks ${opencl_library})
 
-set(libraries assimp ${frameworks})
+set(libraries assimp fftw3f ${frameworks})
 
 target_link_libraries(${name} ${libraries})
 

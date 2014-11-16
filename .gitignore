@@ -2,6 +2,7 @@
 
 *.swp
 *~
+*.aiff
 
 assimp-3.1.1
 build

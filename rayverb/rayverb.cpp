@@ -4,11 +4,7 @@
 #include "assimp/postprocess.h"
 #include "assimp/scene.h"
 
-#define VECTORISE
-
-#ifdef VECTORISE
-#include <x86intrin.h>
-#endif
+#include "fftw3.h"
 
 #include <cmath>
 #include <numeric>
@@ -19,6 +15,162 @@
 //#define USE_OBJECT_MATERIALS
 
 using namespace std;
+
+template <typename T>
+T sinc (const T & t)
+{
+    T pit = M_PI * t;
+    return sin (pit) / pit;
+}
+
+template <typename T>
+vector <T> sincKernel (double cutoff, unsigned long length)
+{
+    if (! (length % 2))
+        throw runtime_error ("Length of sinc filter kernel must be odd.");
+
+    vector <T> ret (length);
+    for (unsigned long i = 0; i != length; ++i)
+    {
+        if (i == ((length - 1) / 2))
+            ret [i] = 1;
+        else
+            ret [i] = sinc (2 * cutoff * (i - (length - 1) / 2.0));
+    }
+    return ret;
+}
+
+template <typename T>
+vector <T> blackman (unsigned long length)
+{
+    const double a0 = 7938.0 / 18608.0;
+    const double a1 = 9240.0 / 18608.0;
+    const double a2 = 1430.0 / 18608.0;
+
+    vector <T> ret (length);
+    for (unsigned long i = 0; i != length; ++i)
+    {
+        const double offset = i / (length - 1.0);
+        ret [i] =
+        (   a0
+        -   a1 * cos (2 * M_PI * offset)
+        +   a2 * cos (4 * M_PI * offset)
+        );
+    }
+    return ret;
+}
+
+vector <float> lopassKernel (float sr, float cutoff, unsigned long length)
+{
+    vector <float> window = blackman <float> (length);
+    vector <float> kernel = sincKernel <float> (cutoff / sr, length);
+    vector <float> ret (length);
+    transform
+    (   begin (window)
+    ,   end (window)
+    ,   begin (kernel)
+    ,   begin (ret)
+    ,   [&] (float i, float j) { return i * j; }
+    );
+    float sum = accumulate (begin (ret), end (ret), 0.0);
+    for (auto & i : ret) i /= sum;
+    return ret;
+}
+
+vector <float> hipassKernel (float sr, float cutoff, unsigned long length)
+{
+    vector <float> kernel = lopassKernel (sr, cutoff, length);
+    for (auto & i : kernel) i = -i;
+    kernel [(length - 1) / 2] += 1;
+    return kernel;
+}
+
+void forward_fft
+(   fftwf_plan & plan
+,   const vector <float> & data
+,   float * i
+,   fftwf_complex * o
+,   unsigned long FFT_LENGTH
+,   fftwf_complex * results
+)
+{
+    const unsigned long CPLX_LENGTH = FFT_LENGTH / 2 + 1;
+
+    memset (i, 0, sizeof (float) * FFT_LENGTH);
+    //memset (o, 0, sizeof (fftwf_complex) * CPLX_LENGTH);
+    memcpy (i, data.data(), sizeof (float) * data.size());
+    fftwf_execute (plan);
+    memcpy (results, o, sizeof (fftwf_complex) * CPLX_LENGTH);
+}
+
+vector <float> fastConvolve (const vector <float> & a, const vector <float> & b)
+{
+    const unsigned long FFT_LENGTH = a.size() + b.size() - 1;
+    const unsigned long CPLX_LENGTH = FFT_LENGTH / 2 + 1;
+
+    float * r2c_i = fftwf_alloc_real (FFT_LENGTH);
+    fftwf_complex * r2c_o = fftwf_alloc_complex (CPLX_LENGTH);
+
+    fftwf_complex * acplx = fftwf_alloc_complex (CPLX_LENGTH);
+    fftwf_complex * bcplx = fftwf_alloc_complex (CPLX_LENGTH);
+
+    fftwf_plan r2c = fftwf_plan_dft_r2c_1d
+    (   FFT_LENGTH
+    ,   r2c_i
+    ,   r2c_o
+    ,   FFTW_ESTIMATE
+    );
+
+    forward_fft (r2c, a, r2c_i, r2c_o, FFT_LENGTH, acplx);
+    forward_fft (r2c, b, r2c_i, r2c_o, FFT_LENGTH, bcplx);
+
+    fftwf_destroy_plan (r2c);
+    fftwf_free (r2c_i);
+    fftwf_free (r2c_o);
+
+    fftwf_complex * c2r_i = fftwf_alloc_complex (CPLX_LENGTH);
+    float * c2r_o = fftwf_alloc_real (FFT_LENGTH);
+
+    memset (c2r_i, 0, sizeof (fftwf_complex) * CPLX_LENGTH);
+    memset (c2r_o, 0, sizeof (float) * FFT_LENGTH);
+
+    fftwf_complex * x = acplx;
+    fftwf_complex * y = bcplx;
+    fftwf_complex * z = c2r_i;
+
+    for (; z != c2r_i + CPLX_LENGTH; ++x, ++y, ++z)
+    {
+        (*z) [0] += (*x) [0] * (*y) [0] - (*x) [1] * (*y) [1];
+        (*z) [1] += (*x) [0] * (*y) [1] + (*x) [1] * (*y) [0];
+    }
+
+    fftwf_free (acplx);
+    fftwf_free (bcplx);
+
+    fftwf_plan c2r = fftwf_plan_dft_c2r_1d
+    (   FFT_LENGTH
+    ,   c2r_i
+    ,   c2r_o
+    ,   FFTW_ESTIMATE
+    );
+
+    fftwf_execute (c2r);
+    fftwf_destroy_plan (c2r);
+
+    vector <float> ret (c2r_o, c2r_o + FFT_LENGTH);
+
+    fftwf_free (c2r_i);
+    fftwf_free (c2r_o);
+
+    return ret;
+}
+
+vector <float> bandpassKernel (float sr, float lo, float hi, unsigned long l)
+{
+    vector <float> lop = lopassKernel (sr, hi, l);
+    vector <float> hip = hipassKernel (sr, lo, l);
+    return fastConvolve (lop, hip);
+}
 
 cl_float3 fromAIVec (const aiVector3D & v)
 {
@@ -97,77 +249,15 @@ vector <VolumeType> flattenImpulses
 }
 
 template <typename T>
-void lopass
-(   vector <T> & data
-,   float cutoff
-,   float sr
-,   int index
-) throw()
+vector <float> bandpass (const vector <T> & data, float lo, float hi, float sr, int index) throw()
 {
-    const float param = 1 - exp (-2 * M_PI * cutoff / sr);
-    float state = 0;
-
-    for (auto & i : data)
-        i.s [index] = state += param * (i.s [index] - state);
+    vector <float> input (data.size());
+    transform (begin (data), end (data), begin (input), [&] (const T & t) { return t.s [index]; });
+    vector <float> kernel = bandpassKernel (sr, lo, hi, 127);
+    return fastConvolve (input, kernel);
 }
 
-template <typename T>
-void hipass
-(   vector <T> & data
-,   float cutoff
-,   float sr
-,   int index
-) throw()
-{
-    const float param = 1 - exp (-2 * M_PI * cutoff / sr);
-    float state = 0;
-
-    for (auto & i : data)
-        i.s [index] -= state += param * (i.s [index] - state);
-}
-
-template <typename T>
-void bandpass
-(   vector <T> & data
-,   float lo
-,   float hi
-,   float sr
-,   int index
-) throw()
-{
-    lopass (data, hi, sr, index);
-    hipass (data, lo, sr, index);
-}
-
-void filter (vector <cl_float3> & data, float lo, float hi, float sr) throw()
-{
-#ifdef VECTORISE
-    const float loParam = 1 - exp (-2 * M_PI * lo / sr);
-    const float hiParam = 1 - exp (-2 * M_PI * hi / sr);
-
-    __m128 state = {0};
-    __m128 params = {loParam, hiParam, loParam, hiParam};
-
-    for (auto & i : data)
-    {
-        __m128 in = {i.s [0], i.s [1], i.s [1], i.s [2]};
-        __m128 t0 = _mm_sub_ps (in, state);
-        __m128 t1 = _mm_mul_ps (t0, params);
-        state = _mm_add_ps (t1, state);
-
-        i.s [0] = state [0];
-        i.s [1] = state [1];
-        i.s [1] -= state [2];
-        i.s [2] -= state [3];
-    }
-#else
-    lopass (data, lo, sr, 0);
-    bandpass (data, lo, hi, sr, 1);
-    hipass (data, hi, sr, 2);
-#endif
-}
-
-void filter
+vector <float> filter
 (   vector <cl_float8> & data
 ,   float b0
 ,   float b1
@@ -176,17 +266,25 @@ void filter
 ,   float b4
 ,   float b5
 ,   float b6
+,   float b7
 ,   float sr
 )   throw()
 {
-    //  could speed this up somehow?
-    bandpass (data,  0, b1, sr, 0);
-    bandpass (data, b0, b2, sr, 1);
-    bandpass (data, b1, b3, sr, 2);
-    bandpass (data, b2, b4, sr, 3);
-    bandpass (data, b3, b5, sr, 4);
-    bandpass (data, b4, b6, sr, 5);
-    bandpass (data, b5, 20000, sr, 6);
+    vector <float> x0 = bandpass (data, b0, b1, sr, 0);
+    vector <float> x1 = bandpass (data, b1, b2, sr, 1);
+    vector <float> x2 = bandpass (data, b2, b3, sr, 2);
+    vector <float> x3 = bandpass (data, b3, b4, sr, 3);
+    vector <float> x4 = bandpass (data, b4, b5, sr, 4);
+    vector <float> x5 = bandpass (data, b5, b6, sr, 5);
+    vector <float> x6 = bandpass (data, b6, b7, sr, 6);
+
+    vector <float> ret (x0.size());
+    for (unsigned long i = 0; i != x0.size(); ++i)
+    {
+        ret [i] = x0 [i] + x1 [i] + x2 [i] + x3 [i] + x4 [i] + x5 [i] + x6 [i];
+    }
+
+    return ret;
 }
 
 void hipass (vector <float> & data, float lo, float sr) throw()
@@ -224,8 +322,9 @@ vector <vector <float>> process
     for (int i = 0; i != data.size(); ++i)
     {
         //filter (data [i], 200, 2000, sr);
-        filter (data [i], 125, 250, 500, 1000, 2000, 4000, 8000, sr);
-        ret [i] = sum (data [i]);
+        //filter (data [i], 125, 250, 500, 1000, 2000, 4000, 8000, sr);
+        ret [i] = filter (data [i], 20, 200, 400, 800, 1600, 3200, 6400, 12800, sr);
+        //ret [i] = sum (data [i]);
         hipass (ret [i], 20, sr);
     }
 
