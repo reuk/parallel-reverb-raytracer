@@ -193,10 +193,25 @@ constant VolumeType AIR_COEFFICIENT =
 ,   0.001 * -60.0
 };
 
+VolumeType air_attenuation_for_distance (float distance);
+VolumeType air_attenuation_for_distance (float distance)
+{
+    return float8 (1.0) * pow (M_E, distance * AIR_COEFFICIENT);
+}
+
+float power_attenuation_for_distance (float distance);
+float power_attenuation_for_distance (float distance)
+{
+    return 1 / (distance * distance);
+}
+
 VolumeType attenuation_for_distance (float distance);
 VolumeType attenuation_for_distance (float distance)
 {
-    return float8 (1.0) * pow (M_E, distance * AIR_COEFFICIENT);
+    return
+    (   air_attenuation_for_distance (distance)
+    *   power_attenuation_for_distance (distance)
+    );
 }
 
 kernel void raytrace
