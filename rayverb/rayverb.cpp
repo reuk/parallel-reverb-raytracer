@@ -108,7 +108,8 @@ vector <float> sum (const vector <T> & data)
 }
 
 vector <vector <float>> process
-(   vector <vector <VolumeType>> & data
+(   RayverbFiltering::FilterType filtertype
+,   vector <vector <VolumeType>> & data
 ,   float sr
 )
 {
@@ -117,7 +118,7 @@ vector <vector <float>> process
     for (int i = 0; i != data.size(); ++i)
     {
         ret [i] = RayverbFiltering::filter
-        (   RayverbFiltering::FILTER_TYPE_BIQUAD_TWOPASS
+        (   filtertype
         ,   data[i]
         ,   sr
         );
@@ -251,6 +252,24 @@ public:
             ,   end (meshTriangles)
             );
         }
+
+        cerr << "Loaded 3D model with " << triangles.size() << " triangles" << endl;
+        cerr << "Model bounds: " << endl;
+
+        cl_float3 mini, maxi;
+        mini = maxi = vertices.front();
+
+        for (const auto & i : vertices)
+        {
+            for (int j = 0; j != 3; ++j)
+            {
+                mini.s [j] = min (mini.s [j], i.s [j]);
+                maxi.s [j] = max (maxi.s [j], i.s [j]);
+            }
+        }
+
+        cerr << " mini [" << mini.s [0] << ", " << mini.s [1] << ", " << mini.s [2] << "]" << endl;
+        cerr << " maxi [" << maxi.s [0] << ", " << maxi.s [1] << ", " << maxi.s [2] << "]" << endl;
     }
 
     void populate (const std::string & objpath)

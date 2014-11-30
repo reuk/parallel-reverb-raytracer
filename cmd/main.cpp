@@ -13,8 +13,13 @@ using namespace std;
 
 int main(int argc, const char * argv[])
 {
+    /*
     cl_float3 source = {5, 5, 5, 0};
     cl_float3 mic = {-5, -5, -5, 0};
+    */
+
+    cl_float3 source = {0, -50, 20, 0};
+    cl_float3 mic = {-5, -55, 25, 0};
 
     vector <Speaker> speakers
     {   (Speaker) {(cl_float3) {1, 0, 0}, 0.5}
@@ -22,7 +27,7 @@ int main(int argc, const char * argv[])
     };
 
     const unsigned long NUM_RAYS = 1024 * 32;
-    const unsigned long NUM_IMPULSES = 128;
+    const unsigned long NUM_IMPULSES = 32;
 
     vector <cl_float3> directions = getRandomDirections (NUM_RAYS);
     vector <vector <Impulse>> attenuated;
@@ -72,7 +77,11 @@ int main(int argc, const char * argv[])
         }
     );
 
-    vector <vector <float>> outdata = process (flattened, SAMPLE_RATE);
+    vector <vector <float>> outdata = process
+    (   RayverbFiltering::FILTER_TYPE_BIQUAD_TWOPASS
+    ,   flattened
+    ,   SAMPLE_RATE
+    );
 
     vector <float> interleaved (outdata.size() * outdata [0].size());
 

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "filters.h"
+
 //#define DIAGNOSTIC
 
 #define __CL_ENABLE_EXCEPTIONS
@@ -67,7 +69,8 @@ std::vector <VolumeType> flattenImpulses
 );
 
 std::vector <std::vector <float>> process
-(   std::vector <std::vector <VolumeType>> & data
+(   RayverbFiltering::FilterType filtertype
+,   std::vector <std::vector <VolumeType>> & data
 ,   float samplerate
 );
 
