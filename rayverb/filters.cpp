@@ -2,8 +2,8 @@
 
 #include "fftw3.h"
 
-#include <cmath>
 #include <numeric>
+#include <iostream>
 
 using namespace std;
 
@@ -94,9 +94,9 @@ void forward_fft
     memcpy (results, o, sizeof (fftwf_complex) * CPLX_LENGTH);
 }
 
-std::vector <float> RayverbFiltering::fastConvolve
-(   const std::vector <float> & a
-,   const std::vector <float> & b
+vector <float> RayverbFiltering::fastConvolve
+(   const vector <float> & a
+,   const vector <float> & b
 )
 {
     const unsigned long FFT_LENGTH = a.size() + b.size() - 1;
@@ -169,4 +169,68 @@ vector <float> RayverbFiltering::bandpassKernel
     vector <float> lop = lopassKernel (sr, hi, l);
     vector <float> hip = hipassKernel (sr, lo, l);
     return fastConvolve (lop, hip);
+}
+
+vector <float> RayverbFiltering::biquad
+(   const vector <float> & input
+,   double b0
+,   double b1
+,   double b2
+,   double a1
+,   double a2
+)
+{
+    double z1 = 0, z2 = 0;
+
+    return map <vector <float>>
+    (   input
+    ,   [&] (float i)
+        {
+            double out = i * b0 + z1;
+            z1 = i * b1 + z2 - a1 * out;
+            z2 = i * b2 - a2 * out;
+            return out;
+        }
+    );
+}
+
+vector <float> RayverbFiltering::bandpassBiquad
+(   const vector <float> & data
+,   float lo
+,   float hi
+,   float sr
+)
+{
+    const double c = sqrt (lo * hi);
+    const double omega = 2 * M_PI * c / sr;
+    const double cs = cos (omega);
+    const double sn = sin (omega);
+    const double bandwidth = log2 (hi / lo);
+    const double Q = sn / (log(2) * bandwidth * omega);
+    const double alpha = sn * sinh (1 / (2 * Q));
+
+    double b0 = alpha;
+    double b1 = 0;
+    double b2 = -alpha;
+    double a0 = 1 + alpha;
+    double a1 = -2 * cs;
+    double a2 = 1 - alpha;
+
+    const double nrm = 1 / a0;
+
+    b0 *= nrm;
+    b1 *= nrm;
+    b2 *= nrm;
+    a0 *= nrm;
+    a1 *= nrm;
+    a2 *= nrm;
+
+    return biquad
+    (   data
+    ,   b0
+    ,   b1
+    ,   b2
+    ,   a1
+    ,   a2
+    );
 }

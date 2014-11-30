@@ -117,7 +117,7 @@ vector <vector <float>> process
     for (int i = 0; i != data.size(); ++i)
     {
         ret [i] = RayverbFiltering::filter
-        (   RayverbFiltering::FILTER_TYPE_WINDOWED_SINC
+        (   RayverbFiltering::FILTER_TYPE_BIQUAD_TWOPASS
         ,   data[i]
         ,   sr
         );
