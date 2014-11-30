@@ -45,9 +45,6 @@ def sine_sweep(lower, upper, length, sr):
     phase -= lo
     return np.sin(phase)
 
-def phase(h):
-    return np.unwrap(np.arctan2(np.imag(h), np.real(h)))
-
 def main():
     sr = 44100.0
     wl = 31

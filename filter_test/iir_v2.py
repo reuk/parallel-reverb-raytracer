@@ -26,9 +26,6 @@ def bandpass_coeffs(lo, hi, sr):
 
     return b, a
 
-def phase(h):
-    return np.unwrap(np.arctan2(np.imag(h), np.real(h)))
-
 def sine_sweep(lower, upper, length, sr):
     lo = 2 * np.pi * lower / sr
     hi = 2 * np.pi * upper / sr
@@ -46,40 +43,15 @@ def main():
     boundaries = [20, 190, 380, 760, 1520, 3040, 6080, 12160, 20000]
     boundaries = zip(boundaries[:-1], boundaries[1:])
 
-    labels = [str(lo) + " - " + str(hi) + "Hz" for lo, hi in boundaries]
-    labels.append("Full Range")
-
     c = [bandpass_coeffs(lo, hi, sr) for lo, hi in boundaries]
-
-    wh = [signal.freqz(b, a) for b, a in c]
-    wh.append(
-        reduce(lambda (w, y), (_, x): [w, y + x], wh)
-    )
-
-    plt.subplot(211)
-    plt.title("Frequency response of EQ filters")
-    for (w, h), l in zip(wh, labels):
-        plt.plot((w / np.pi) * (sr / 2), 20 * np.log10(np.abs(h)), label=l)
-    plt.ylabel('Amplitude Response (dB)')
-    plt.xlabel('Frequency (Hz)')
-    plt.grid()
-    plt.legend()
-
-    plt.subplot(212)
-    plt.title("Phase response of EQ filters")
-    for (w, h), l in zip(wh, labels):
-        plt.plot((w / np.pi) * (sr / 2), phase(h), label=l)
-    plt.ylabel('Phase (radians)')
-    plt.xlabel('Frequency (Hz)')
-    plt.grid()
-    plt.legend()
-
-    plt.show()
 
     sig = (np.random.rand(sr * 10) * 2 - 1) * 0.9
     #sig = sine_sweep(20, 20000, sr * 10, sr) * 0.9
 
     filtered = [signal.lfilter(b, a, sig) for b, a in c]
+    filtered = [np.flipud(i) for i in filtered]
+    filtered = [signal.lfilter(b, a, i) for (b, a), i in zip(c, filtered)]
+    filtered = [np.flipud(i) for i in filtered]
 
     [write_file(str(i) + ".aiff", f, sr) for i, f in enumerate(filtered)]
 
