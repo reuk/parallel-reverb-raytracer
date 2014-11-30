@@ -1,4 +1,6 @@
 import numpy as np
+import scipy.signal as signal
+import matplotlib.pyplot as plt
 from scikits.audiolab import Format, Sndfile
 from os.path import splitext
 
@@ -43,14 +45,45 @@ def sine_sweep(lower, upper, length, sr):
     phase -= lo
     return np.sin(phase)
 
+def phase(h):
+    return np.unwrap(np.arctan2(np.imag(h), np.real(h)))
+
 def main():
     sr = 44100.0
-    wl = (2 ** 14) - 1
+    wl = 31
 
-    boundaries = [22, 44, 88, 177, 354, 707, 1414, 2828, 5657, 11314, 20000]
+    boundaries = [20, 190, 380, 760, 1520, 3040, 6080, 12160, 20000]
     boundaries = zip(boundaries[:-1], boundaries[1:])
 
+    labels = [str(lo) + " - " + str(hi) + "Hz" for lo, hi in boundaries]
+    labels.append("Full Range")
+
     kernels = [bandpass_kernel(sr, i, j, wl) for i, j in boundaries]
+
+    kernels.append(
+        reduce(lambda x, y: x + y, kernels)
+    )
+
+    wh = [signal.freqz(k) for k in kernels]
+
+    plt.figure(1)
+    for k, l in zip(kernels, labels):
+        plt.plot(k, label=l)
+    plt.title("Filter Coefficients (%d taps)" % len(kernels[0]))
+    plt.grid()
+    plt.legend()
+
+    plt.figure(2)
+    plt.clf()
+    for (w, h), l in zip(wh, labels):
+        plt.plot((w / np.pi) * (sr / 2), 20 * np.log10(np.abs(h)), label=l)
+    plt.ylabel("Amplitude Response (dB)")
+    plt.xlabel("Frequency (Hz)")
+    plt.title("Frequency Response of Parallel Filters")
+    plt.grid()
+    plt.legend()
+
+    plt.show()
 
     summed = reduce(lambda x, y: x + y, kernels)
     write_file("summed.aiff", summed, sr)
