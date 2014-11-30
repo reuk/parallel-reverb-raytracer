@@ -9,7 +9,7 @@ include_directories(
 )
 
 set(name rayverb)
-set(sources rayverb.cpp)
+set(sources rayverb.cpp filters.cpp)
 
 add_library(${name} ${sources})
 

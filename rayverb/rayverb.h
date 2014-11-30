@@ -10,11 +10,6 @@
 #include <numeric>
 #include <iostream>
 
-std::vector <float> lopassKernel (float sr, float cutoff, unsigned long length);
-std::vector <float> hipassKernel (float sr, float cutoff, unsigned long length);
-std::vector <float> bandpassKernel (float sr, float lo, float hi, unsigned long l);
-std::vector <float> fastConvolve (const std::vector <float> & a, const std::vector <float> & b);
-
 //  These definitions MUST be kept up-to-date with the defs in the cl file.
 //  It might make sense to nest them inside the Scene because I don't think
 //  other classes will need the same data formats.
@@ -69,51 +64,51 @@ typedef _Speaker_unalign __attribute__ ((aligned(8))) Speaker;
 std::vector <VolumeType> flattenImpulses
 (   const std::vector <Impulse> & impulse
 ,   float samplerate
-) throw();
+);
 
 std::vector <std::vector <float>> process
 (   std::vector <std::vector <VolumeType>> & data
 ,   float samplerate
-) throw();
+);
 
 template <typename T>
-inline float max_amp (const std::vector <T> & ret) throw();
+inline float max_amp (const std::vector <T> & ret);
 
 template <typename T>
 struct FabsMax: public std::binary_function <float, T, float>
 {
-    inline float operator() (float a, T b) const throw()
+    inline float operator() (float a, T b) const
         { return std::max (a, max_amp (b)); }
 };
 
 template<>
 struct FabsMax <float>: public std::binary_function <float, float, float>
 {
-    inline float operator() (float a, float b) const throw()
+    inline float operator() (float a, float b) const
         { return std::max (a, std::fabs (b)); }
 };
 
 template <typename T>
-inline float max_amp (const std::vector <T> & ret) throw()
+inline float max_amp (const std::vector <T> & ret)
 {
     return std::accumulate (begin (ret), end (ret), 0.0f, FabsMax <T>());
 }
 
 template <typename T>
-inline void div (T & ret, float f) throw()
+inline void div (T & ret, float f)
 {
     for (auto & i : ret)
         div (i, f);
 }
 
 template<>
-inline void div (float & ret, float f) throw()
+inline void div (float & ret, float f)
 {
     ret /= f;
 }
 
 template <typename T>
-inline void normalize (std::vector <T> & ret) throw()
+inline void normalize (std::vector <T> & ret)
 {
     div (ret, max_amp (ret));
 }
