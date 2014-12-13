@@ -48,6 +48,12 @@ typedef struct {
     float coefficient;
 } Speaker;
 
+typedef struct {
+    int azimuth, elevation;
+    VolumeType coefficients [2];
+} Hrtf;
+
+
 float triangle_intersection
 (   global Triangle * triangle
 ,   global float3 * vertices
@@ -341,3 +347,87 @@ kernel void attenuate
     }
 }
 
+float3 transform (float3 pointing, float3 up, float3 d)
+{
+    float3 x = normalize(cross(up, pointing));
+    float3 y = cross(pointing, x);
+    float3 z = pointing;
+
+    return (float3)
+    (   dot(x, d)
+    ,   dot(y, d)
+    ,   dot(z, d)
+    );
+}
+
+float azimuth (float3 d)
+{
+    return atan2(d.y, d.x);
+}
+
+float elevation (float3 d)
+{
+    return atan2(d.z, length(d.xy));
+}
+
+VolumeType hrtf_attenuation
+(   global Hrtf * hrtfData
+,   unsigned long hrtfLen
+,   float3 pointing
+,   float3 up
+,   float3 impulseDirection
+,   unsigned long channel
+)
+{
+    float3 transformed = transform(pointing, up, impulseDirection);
+    float a = fmod(degrees(azimuth(transformed)) + 360, 360);
+    float e = fmod(degrees(elevation(transformed)) + 360, 360);
+
+    VolumeType vt = (VolumeType) (0);
+
+    for (unsigned long i = 1; i != hrtfLen; ++i)
+    {
+        if
+        (   a < hrtfData [i].azimuth
+        &&  hrtfData [i - 1].elevation <= e
+        &&  e < hrtfData [i].elevation
+        )
+        {
+            vt = hrtfData [i].coefficients [channel];
+            break;
+        }
+    }
+
+    return vt;
+}
+
+kernel void hrtf
+(   global Impulse * impulsesIn
+,   global Impulse * impulsesOut
+,   unsigned long outputOffset
+,   global Hrtf * hrtfData
+,   unsigned long hrtfLen
+,   float3 pointing
+,   float3 up
+,   unsigned long channel
+)
+{
+    size_t i = get_global_id (0);
+    const unsigned long END = (i + 1) * outputOffset;
+    for (unsigned long j = i * outputOffset; j != END; ++j)
+    {
+        const VolumeType ATTENUATION = hrtf_attenuation
+        (   hrtfData
+        ,   hrtfLen
+        ,   pointing
+        ,   up
+        ,   impulsesIn [j].direction
+        ,   channel
+        );
+        impulsesOut [j] = (Impulse)
+        {   impulsesIn [j].volume * ATTENUATION
+        ,   impulsesIn [j].direction
+        ,   impulsesIn [j].time
+        };
+    }
+}

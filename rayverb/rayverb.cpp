@@ -1,6 +1,10 @@
 #include "rayverb.h"
 #include "filters.h"
 
+#include "rapidjson/rapidjson.h"
+#include "rapidjson/error/en.h"
+#include "rapidjson/document.h"
+
 #include "assimp/Importer.hpp"
 #include "assimp/postprocess.h"
 #include "assimp/scene.h"
@@ -9,11 +13,11 @@
 #include <numeric>
 #include <fstream>
 #include <streambuf>
-#include <iostream>
-
-//#define USE_OBJECT_MATERIALS
+#include <sstream>
+#include <map>
 
 using namespace std;
+using namespace rapidjson;
 
 cl_float3 fromAIVec (const aiVector3D & v)
 {
@@ -88,6 +92,24 @@ vector <VolumeType> flattenImpulses
         flattened [SAMPLE] = sum (flattened [SAMPLE], i.volume);
     }
 
+    return flattened;
+}
+
+vector <vector <VolumeType>> flattenImpulses
+(   const vector <vector <Impulse>> & attenuated
+,   float samplerate
+)
+{
+    vector <vector <VolumeType>> flattened (attenuated.size());
+    transform
+    (   begin (attenuated)
+    ,   end (attenuated)
+    ,   begin (flattened)
+    ,   [&] (const vector <Impulse> & i)
+        {
+            return flattenImpulses (i, samplerate);
+        }
+    );
     return flattened;
 }
 
@@ -181,19 +203,136 @@ Scene::Scene
 struct Scene::SceneData
 {
 public:
-    SceneData (const std::string & objpath)
+    SceneData (const string & objpath, const string & materialFileName)
     {
-        populate (objpath);
+        populate (objpath, materialFileName);
     }
 
-    void populate (const aiScene * scene)
+    void checkJsonSurfaceKey (const Value & json, const string & key)
+    {
+        if (! json.HasMember (key.c_str()))
+            throw runtime_error
+            (   string ("Surface must contain '") + key + "' key"
+            );
+
+        if (! json [key.c_str()].IsArray())
+            throw runtime_error
+            (   string ("Type of ") + key + " must be 'Array'"
+            );
+
+        constexpr unsigned bands = sizeof (VolumeType) / sizeof (float);
+        if (json [key.c_str()].Capacity() != bands)
+        {
+            stringstream ss;
+            ss << "Length of material description array must be " << bands;
+            throw runtime_error (ss.str());
+        }
+
+        for (unsigned i = 0; i != bands; ++i)
+            if (! json [key.c_str()] [i].IsNumber())
+                throw runtime_error
+                (   "Elements of material description array must be numerical"
+                );
+    }
+
+    Surface jsonToSurface (const Value & json)
+    {
+        if (! json.IsObject())
+            throw runtime_error ("Surface must be a JSON object");
+
+        string specular_string ("specular");
+        string diffuse_string ("diffuse");
+
+        checkJsonSurfaceKey (json, specular_string);
+        checkJsonSurfaceKey (json, diffuse_string);
+
+        constexpr unsigned bands = sizeof (VolumeType) / sizeof (float);
+
+        Surface ret;
+        for (unsigned i = 0; i != bands; ++i)
+        {
+            ret.specular.s [i] = json [specular_string.c_str()] [i].GetDouble();
+            ret.diffuse.s [i] = json [diffuse_string.c_str()] [i].GetDouble();
+        }
+
+        for (unsigned i = 0; i != bands; ++i)
+        {
+            if (ret.specular.s [i] < 0 || 1 < ret.specular.s [i])
+            {
+                stringstream ss;
+                ss
+                <<  "Invalid specular value '"
+                <<  ret.specular.s [i]
+                <<  "' found"
+                <<  endl;
+                ss << "Specular values must be in the range (0, 1)" << endl;
+                throw runtime_error (ss.str());
+            }
+            if (ret.diffuse.s [i] < 0 || 1 < ret.diffuse.s [i])
+            {
+                stringstream ss;
+                ss
+                <<  "Invalid diffuse value '"
+                <<  ret.diffuse.s [i]
+                <<  "' found"
+                <<  endl;
+                ss << "Diffuse values must be in the range (0, 1)" << endl;
+                throw runtime_error (ss.str());
+            }
+        }
+
+        return ret;
+    }
+
+    void populate (const aiScene * scene, const string & materialFileName)
     {
         if (! scene)
             throw runtime_error ("Failed to load object file.");
 
+        Surface surface = {
+            (VolumeType) {0.02, 0.02, 0.03, 0.03, 0.04, 0.05, 0.05, 0.05},
+            (VolumeType) {0.50, 0.90, 0.95, 0.95, 0.95, 0.95, 0.95, 0.95}
+        };
+
+        surfaces.push_back (surface);
+
+        ifstream in (materialFileName);
+        string materialFile
+        (   (istreambuf_iterator <char> (in))
+        ,   istreambuf_iterator <char>()
+        );
+
+        Document document;
+        document.Parse(materialFile.c_str());
+
+        if (! document.IsObject())
+            throw runtime_error ("Materials must be stored in a JSON object");
+
+        map <string, int> materialIndices;
+        for
+        (   Value::ConstMemberIterator i = document.MemberBegin()
+        ;   i != document.MemberEnd()
+        ;   ++i
+        )
+        {
+            string name = i->name.GetString();
+            surfaces.push_back (jsonToSurface (i->value));
+            materialIndices [name] = surfaces.size() - 1;
+        }
+
         for (unsigned long i = 0; i != scene->mNumMeshes; ++i)
         {
             const aiMesh * mesh = scene->mMeshes [i];
+
+            aiString name = mesh->mName;
+            cerr << "Found mesh: " << name.C_Str() << endl;
+
+            unsigned long mat_index = 0;
+            auto nameIterator = materialIndices.find (name.C_Str());
+            if (nameIterator != materialIndices.end())
+                mat_index = nameIterator->second;
+
+            Surface surface = surfaces [mat_index];
 
             vector <cl_float3> meshVertices (mesh->mNumVertices);
 
@@ -202,29 +341,33 @@ public:
                 meshVertices [j] = fromAIVec (mesh->mVertices [j]);
             }
 
-#ifdef USE_OBJECT_MATERIALS
-            const aiMaterial * material = scene->mMaterials
-            [   mesh->mMaterialIndex
-            ];
+            const aiMaterial * material =
+                scene->mMaterials [mesh->mMaterialIndex];
+            material->Get (AI_MATKEY_NAME, name);
 
-            aiColor3D diffuse (0.9, 0.8, 0.7);
-            material->Get(AI_MATKEY_COLOR_DIFFUSE, diffuse);
+            cerr << "    Material name: " << name.C_Str() << endl;
 
-            aiColor3D specular (0.9, 0.8, 0.7);
-            material->Get(AI_MATKEY_COLOR_SPECULAR, specular);
-
-            Surface surface = {
-                (cl_float3) {specular.r, specular.g, specular.b, 0},
-                (cl_float3) {diffuse.r, diffuse.g, diffuse.b, 0}
-            };
-#else
-            Surface surface = {
-                (VolumeType) {0.98, 0.98, 0.97, 0.97, 0.96, 0.95, 0.95, 0.95},
-                (VolumeType) {0.50, 0.90, 0.95, 0.95, 0.95, 0.95, 0.95, 0.95}
-            };
-#endif
-
-            surfaces.push_back (surface);
+            cerr << "    Material properties: " << endl;
+            cerr << "        specular: ["
+                 << surface.specular.s [0] << ", "
+                 << surface.specular.s [1] << ", "
+                 << surface.specular.s [2] << ", "
+                 << surface.specular.s [3] << ", "
+                 << surface.specular.s [4] << ", "
+                 << surface.specular.s [5] << ", "
+                 << surface.specular.s [6] << ", "
+                 << surface.specular.s [7] << "]"
+                 << endl;
+            cerr << "        diffuse: ["
+                 << surface.diffuse.s [0] << ", "
+                 << surface.diffuse.s [1] << ", "
+                 << surface.diffuse.s [2] << ", "
+                 << surface.diffuse.s [3] << ", "
+                 << surface.diffuse.s [4] << ", "
+                 << surface.diffuse.s [5] << ", "
+                 << surface.diffuse.s [6] << ", "
+                 << surface.diffuse.s [7] << "]"
+                 << endl;
 
             vector <Triangle> meshTriangles (mesh->mNumFaces);
 
@@ -233,7 +376,7 @@ public:
                 const aiFace face = mesh->mFaces [j];
 
                 meshTriangles [j] = (Triangle) {
-                    surfaces.size() - 1,
+                    mat_index,
                     vertices.size() + face.mIndices [0],
                     vertices.size() + face.mIndices [1],
                     vertices.size() + face.mIndices [2]
@@ -253,7 +396,11 @@ public:
             );
         }
 
-        cerr << "Loaded 3D model with " << triangles.size() << " triangles" << endl;
+        cerr
+        <<  "Loaded 3D model with "
+        <<  triangles.size()
+        <<  " triangles"
+        <<  endl;
         cerr << "Model bounds: " << endl;
 
         cl_float3 mini, maxi;
@@ -268,11 +415,27 @@ public:
             }
         }
 
-        cerr << " mini [" << mini.s [0] << ", " << mini.s [1] << ", " << mini.s [2] << "]" << endl;
-        cerr << " maxi [" << maxi.s [0] << ", " << maxi.s [1] << ", " << maxi.s [2] << "]" << endl;
+        cerr
+        <<  " mini ["
+        <<  mini.s [0]
+        <<  ", "
+        <<  mini.s [1]
+        <<  ", "
+        <<  mini.s [2]
+        <<  "]"
+        <<  endl;
+        cerr
+        <<  " maxi ["
+        <<  maxi.s [0]
+        <<  ", "
+        <<  maxi.s [1]
+        <<  ", "
+        <<  maxi.s [2]
+        <<  "]"
+        <<  endl;
     }
 
-    void populate (const std::string & objpath)
+    void populate (const string & objpath, const string & materialFileName)
     {
         Assimp::Importer importer;
         populate
@@ -283,6 +446,7 @@ public:
                 |   aiProcess_FlipUVs
                 )
             )
+        ,   materialFileName
         );
     }
 
@@ -354,14 +518,15 @@ Scene::Scene
 (   cl::Context & cl_context
 ,   unsigned long nreflections
 ,   std::vector <cl_float3> & directions
-,   const std::string & objpath
+,   const string & objpath
+,   const string & materialFileName
 ,   bool verbose
 )
 :   Scene
 (   cl_context
 ,   nreflections
 ,   directions
-,   SceneData (objpath)
+,   SceneData (objpath, materialFileName)
 )
 {
 }
@@ -485,3 +650,174 @@ vector <vector <Impulse>> Scene::attenuate (const vector <Speaker> & speakers)
     return attenuated;
 }
 
+Hrtf jsonToHrtfData (const Value & json)
+{
+    if (! json.IsArray())
+        throw runtime_error ("Hrtf must be a JSON array");
+
+    if (json.Size() != 2)
+        throw runtime_error ("Hrtf array length must be 2");
+
+    if (! json [(SizeType) 0].IsObject())
+        throw runtime_error ("Hrtf array first item must be a descriptor object");
+    if (! json [(SizeType) 1].IsArray())
+        throw runtime_error ("Hrtf array second item must be an array of arrays of coefficients");
+
+    if (! json [(SizeType) 0].HasMember ("r"))
+        throw runtime_error ("Hrtf descriptor object must contain radius 'r'");
+    if (! json [(SizeType) 0].HasMember ("a"))
+        throw runtime_error ("Hrtf descriptor object must contain azimuth 'a'");
+    if (! json [(SizeType) 0].HasMember ("e"))
+        throw runtime_error ("Hrtf descriptor object must contain elevation 'e'");
+
+    if (! json [(SizeType) 0] ["r"].IsNumber())
+        throw runtime_error ("Hrtf radius must be numerical");
+    if (! json [(SizeType) 0] ["a"].IsNumber())
+        throw runtime_error ("Hrtf azimuth must be numerical");
+    if (! json [(SizeType) 0] ["e"].IsNumber())
+        throw runtime_error ("Hrtf elevation must be numerical");
+
+    constexpr unsigned bands = sizeof (VolumeType) / sizeof (float);
+
+    if (json [(SizeType) 1].Size() != 2)
+        throw runtime_error ("Hrtf array second item must contain data for two channels");
+
+    if
+    (   !
+        (   json [(SizeType) 1] [(SizeType) 0].IsArray()
+        &&  json [(SizeType) 1] [(SizeType) 1].IsArray()
+        )
+    )
+        throw runtime_error ("Hrtf coefficients must be stored in json arrays");
+
+    if
+    (   json [(SizeType) 1] [(SizeType) 0].Size() != bands
+    ||  json [(SizeType) 1] [(SizeType) 1].Size() != bands
+    )
+        throw runtime_error ("Hrtf coefficient array has incorrect length");
+
+    VolumeType vt_l;
+    VolumeType vt_r;
+    for (int i = 0; i != bands; ++i)
+    {
+        vt_l.s [i] = json [(SizeType) 1] [(SizeType) 0] [i].GetDouble();
+        vt_r.s [i] = json [(SizeType) 1] [(SizeType) 1] [i].GetDouble();
+    }
+
+    const cl_int a = json [(SizeType) 0] ["a"].GetInt();
+    const cl_int e = json [(SizeType) 0] ["e"].GetInt();
+
+    return (Hrtf) {a, e, vt_l, vt_r};
+}
+
+vector <Hrtf> readHrtfFile (const string & file)
+{
+    ifstream in (file);
+    string hrtfFile
+    (   (istreambuf_iterator <char> (in))
+    ,   istreambuf_iterator <char>()
+    );
+
+    Document document;
+    document.Parse(hrtfFile.c_str());
+
+    if (! document.IsArray())
+        throw runtime_error ("Hrtf data must be stored in a JSON array");
+
+    vector <Hrtf> fields;
+
+    for
+    (   Value::ConstValueIterator i = document.Begin()
+    ;   i != document.End()
+    ;   ++i
+    )
+        fields.push_back (jsonToHrtfData (*i));
+
+    sort
+    (   begin (fields)
+    ,   end (fields)
+    ,   [&] (const Hrtf & i, const Hrtf & j)
+        {
+            if (i.azimuth == j.azimuth)
+                return i.elevation < j.elevation;
+            else
+                return i.azimuth < j.azimuth;
+        }
+    );
+
+    return fields;
+}
+
+vector <vector <Impulse>> Scene::hrtf (const string & file)
+{
+    vector <Hrtf> hrtf_vec = readHrtfFile (file);
+
+    cl_hrtf = cl::Buffer
+    (   cl_context
+    ,   CL_MEM_READ_WRITE
+    ,   hrtf_vec.size() * sizeof (Hrtf)
+    );
+
+    cl::copy
+    (   queue
+    ,   begin (hrtf_vec)
+    ,   end (hrtf_vec)
+    ,   cl_hrtf
+    );
+
+    nhrtf = hrtf_vec.size();
+
+    vector <unsigned long> channels = {0, 1};
+
+    vector <vector <Impulse>> attenuated (channels.size());
+    transform
+    (   begin (channels)
+    ,   end (channels)
+    ,   begin (attenuated)
+    ,   [&] (unsigned long i) {return hrtf (i);}
+    );
+    return attenuated;
+}
+
+vector <Impulse> Scene::hrtf (unsigned long channel)
+{
+    //  pass data to opencl
+    //  for each direction, look up the hrtf coefficients
+    //  multiply the impulse at that direction by the coefficients
+    //  return
+    auto hrtf = cl::make_kernel
+    <   cl::Buffer
+    ,   cl::Buffer
+    ,   cl_ulong
+    ,   cl::Buffer
+    ,   cl_ulong
+    ,   cl_float3
+    ,   cl_float3
+    ,   cl_ulong
+    > (cl_program, "hrtf");
+
+    //  remember to keep pointing and up normalized!
+
+    hrtf
+    (   cl::EnqueueArgs (queue, cl::NDRange (nrays))
+    ,   cl_impulses
+    ,   cl_attenuated
+    ,   nreflections
+    ,   cl_hrtf
+    ,   nhrtf
+    ,   {1, 0, 0}
+    ,   {0, 1, 0}
+    ,   channel
+    );
+
+    vector <Impulse> attenuated (nreflections * nrays);
+
+    cl::copy
+    (   queue
+    ,   cl_attenuated
+    ,   begin (attenuated)
+    ,   end (attenuated)
+    );
+
+    return attenuated;
+}

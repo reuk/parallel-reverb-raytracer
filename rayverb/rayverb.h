@@ -63,8 +63,20 @@ typedef struct  {
 
 typedef _Speaker_unalign __attribute__ ((aligned(8))) Speaker;
 
+typedef struct  {
+    cl_int azimuth, elevation;
+    VolumeType coefficients [2];
+} _Hrtf_unalign;
+
+typedef _Hrtf_unalign __attribute__ ((aligned(8))) Hrtf ;
+
 std::vector <VolumeType> flattenImpulses
 (   const std::vector <Impulse> & impulse
+,   float samplerate
+);
+
+std::vector <std::vector <VolumeType>> flattenImpulses
+(   const std::vector <std::vector <Impulse>> & impulse
 ,   float samplerate
 );
 
@@ -144,6 +156,7 @@ public:
     ,   unsigned long nreflections
     ,   std::vector <cl_float3> & directions
     ,   const std::string & objpath
+    ,   const std::string & materialFileName
     ,   bool verbose = false
     );
 
@@ -165,10 +178,15 @@ public:
     (   const std::vector <Speaker> & speakers
     );
 
+    std::vector <Impulse> hrtf (unsigned long channel);
+    std::vector <std::vector <Impulse>> hrtf (const std::string & file);
+
 private:
     const unsigned long nrays;
     const unsigned long nreflections;
     const unsigned long ntriangles;
+
+    unsigned long nhrtf;
 
     cl::Context & cl_context;
 
@@ -183,6 +201,8 @@ private:
 
     cl::Buffer cl_impulses;
     cl::Buffer cl_attenuated;
+
+    cl::Buffer cl_hrtf;
 
     cl::Program cl_program;
 

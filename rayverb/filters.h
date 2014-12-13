@@ -140,7 +140,7 @@ namespace RayverbFiltering
     )
     {
         std::vector <float> edges =
-            {20, 190, 380, 760, 1520, 3040, 6080, 12160, 20000};
+            {1, 190, 380, 760, 1520, 3040, 6080, 12160, 20000};
         std::vector <std::vector <float>> out (edges.size() - 1);
         for (unsigned long i = 0; i != out.size(); ++i)
         {
