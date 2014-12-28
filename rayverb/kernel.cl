@@ -347,6 +347,7 @@ kernel void attenuate
     }
 }
 
+float3 transform (float3 pointing, float3 up, float3 d);
 float3 transform (float3 pointing, float3 up, float3 d)
 {
     float3 x = normalize(cross(up, pointing));
@@ -360,56 +361,61 @@ float3 transform (float3 pointing, float3 up, float3 d)
     );
 }
 
+float azimuth (float3 d);
 float azimuth (float3 d)
 {
     return atan2(d.y, d.x);
 }
 
+float elevation (float3 d);
 float elevation (float3 d)
 {
     return atan2(d.z, length(d.xy));
 }
 
 VolumeType hrtf_attenuation
-(   global Hrtf * hrtfData
-,   unsigned long hrtfLen
+(   global VolumeType * hrtfData
+,   unsigned long azimuths
+,   unsigned long elevations
 ,   float3 pointing
 ,   float3 up
 ,   float3 impulseDirection
-,   unsigned long channel
+);
+VolumeType hrtf_attenuation
+(   global VolumeType * hrtfData
+,   unsigned long azimuths
+,   unsigned long elevations
+,   float3 pointing
+,   float3 up
+,   float3 impulseDirection
 )
 {
     float3 transformed = transform(pointing, up, impulseDirection);
-    float a = fmod(degrees(azimuth(transformed)) + 360, 360);
-    float e = fmod(degrees(elevation(transformed)) + 360, 360);
 
-    VolumeType vt = (VolumeType) (0);
+    //  AZIMUTH measured from 0 (straight ahead) to two pi in AZIMUTHS intervals
+    //  ELEVATION measured from 0 (up) to pi (down) with straight being pi / 2,
+    //  in ELEVATIONS intervals
+    //
+    //  convert azimuth and elevation to steps in the range 0 < AZIMUTHS and
+    //  0 < ELEVATIONS
+    //
+    //  look up in hrtfData using a + e * AZIMUTHS
 
-    for (unsigned long i = 1; i != hrtfLen; ++i)
-    {
-        if
-        (   a < hrtfData [i].azimuth
-        &&  hrtfData [i - 1].elevation <= e
-        &&  e < hrtfData [i].elevation
-        )
-        {
-            vt = hrtfData [i].coefficients [channel];
-            break;
-        }
-    }
+    unsigned long a = 0;
+    unsigned long e = 0;
 
-    return vt;
+    return hrtfData[e * azimuths + a];
 }
 
 kernel void hrtf
 (   global Impulse * impulsesIn
 ,   global Impulse * impulsesOut
 ,   unsigned long outputOffset
-,   global Hrtf * hrtfData
-,   unsigned long hrtfLen
+,   global VolumeType * hrtfData
+,   unsigned long azimuths
+,   unsigned long elevations
 ,   float3 pointing
 ,   float3 up
-,   unsigned long channel
 )
 {
     size_t i = get_global_id (0);
@@ -418,12 +424,13 @@ kernel void hrtf
     {
         const VolumeType ATTENUATION = hrtf_attenuation
         (   hrtfData
-        ,   hrtfLen
+        ,   azimuths
+        ,   elevations
         ,   pointing
         ,   up
         ,   impulsesIn [j].direction
-        ,   channel
         );
+
         impulsesOut [j] = (Impulse)
         {   impulsesIn [j].volume * ATTENUATION
         ,   impulsesIn [j].direction

@@ -1,5 +1,15 @@
+//
+//  config reading
+//  commandline parsing
+//  hrtf data conversion + whatever
+//
+
 #include "rayverb.h"
 #include "helpers.h"
+
+#include "rapidjson/rapidjson.h"
+#include "rapidjson/error/en.h"
+#include "rapidjson/document.h"
 
 #include "sndfile.hh"
 
@@ -8,15 +18,25 @@
 #include <random>
 #include <algorithm>
 #include <functional>
+#include <map>
 
 #include <gflags/gflags.h>
 
 using namespace std;
+using namespace rapidjson;
+
+cl_float3 normalize (const cl_float3 & v)
+{
+    cl_float len =
+        1.0 / sqrt (v.s [0] * v.s [0] + v.s [1] * v.s [1] + v.s [2] * v.s [2]);
+    return {v.s [0] * len, v.s [1] * len, v.s [2] * len};
+}
 
 void write_aiff
 (   const string & fname
 ,   const vector <vector <float>> & outdata
 ,   float sr
+,   unsigned long bd
 )
 {
     vector <float> interleaved (outdata.size() * outdata [0].size());
@@ -25,20 +45,36 @@ void write_aiff
         for (int j = 0; j != outdata [i].size(); ++j)
             interleaved [j * outdata.size() + i] = outdata [i] [j];
 
-    SndfileHandle outfile
-    (   fname
-    ,   SFM_WRITE
-    ,   SF_FORMAT_AIFF | SF_FORMAT_PCM_16
-    ,   outdata.size()
-    ,   sr
-    );
-    outfile.write (interleaved.data(), interleaved.size());
+    map <unsigned long, unsigned long> depthTable
+    {   {16, SF_FORMAT_PCM_16}
+    ,   {24, SF_FORMAT_PCM_24}
+    };
+
+    auto i = depthTable.find (bd);
+    if (i != depthTable.end())
+    {
+        SndfileHandle outfile
+        (   fname
+        ,   SFM_WRITE
+        ,   SF_FORMAT_AIFF | i->second
+        ,   outdata.size()
+        ,   sr
+        );
+        outfile.write (interleaved.data(), interleaved.size());
+    }
+    else
+    {
+        cerr << "Can't write a file with that bit-depth. Supported bit-depths:" << endl;
+        for (const auto & j : depthTable)
+            cerr << "    " << j.first << endl;
+    }
 }
 
 void flatten_and_write
 (   const string & fname
 ,   const vector <vector <Impulse>> & impulses
 ,   float sr
+,   unsigned long bd
 )
 {
     vector <vector <VolumeType>> flattened = flattenImpulses
@@ -50,50 +86,256 @@ void flatten_and_write
     ,   flattened
     ,   sr
     );
-    write_aiff (fname, outdata, sr);
+    write_aiff (fname, outdata, sr, bd);
 }
 
-//  probably best to load configuration from a file?
-//
-//  model on commandline
-//  source+mic+speakers/hrtf in file
-//  output on commandline
-//
-//  required inputs
-//      model file
-//      source position
-//      mic position
-//      speakers - any number
-//          direction
-//          quality
-//      hrtf
-//          pointing
-//          up
-//          hrtf file
-//      material file
-//      output filename
-//      filtering method
-//      sampling rate
-//      bit depth
-//      ray number
-//      reflection number
+//  model file
+//  source position
+//  mic position
+//  speakers - any number
+//      direction
+//      quality
+//  hrtf
+//      pointing
+//      up
+//      hrtf file
+//  material file
+//  output filename
+//  filtering method
+//  sampling rate
+//  bit depth
+//  ray number
+//  reflection number
+
+bool validateJson3dVector (const Value & value)
+{
+    if (! value.IsArray())
+        return false;
+    auto components = 3;
+    if (value.Size() != components)
+        return false;
+    for (auto i = 0; i != components; ++i)
+    {
+        if (! value [i].IsNumber())
+            return false;
+    }
+
+    return true;
+}
+
+cl_float3 getJson3dVector (const Value & value)
+{
+    return
+    {   static_cast <cl_float> (value [(SizeType) 0].GetDouble())
+    ,   static_cast <cl_float> (value [(SizeType) 1].GetDouble())
+    ,   static_cast <cl_float> (value [(SizeType) 2].GetDouble())
+    };
+}
+
+enum AttenuationMode
+{   SPEAKER
+,   HRTF
+};
+
+enum RequiredKeys
+{   SOURCE_POSITION
+,   MIC_POSITION
+,   RAYS
+,   REFLECTIONS
+,   SAMPLE_RATE
+,   BIT_DEPTH
+};
 
 int main(int argc, const char * argv[])
 {
-    cl_float3 source = {0, -50, 20, 0};
-    cl_float3 mic = {-5, -55, 25, 0};
+    argc -= 1;
 
-    vector <Speaker> speakers
-    {   (Speaker) {(cl_float3) {1, 0, 0}, 0.5}
-    ,   (Speaker) {(cl_float3) {0, 1, 0}, 0.5}
+    if (argc != 4)
+    {
+        cerr << "Command-line parameters are <config file (.json)> <model file> <material file (.json)> <output file (.aif)>" << endl;
+        return 1;
+    }
+
+    string config_filename (argv [1]);
+    string model_filename (argv [2]);
+    string material_filename (argv [3]);
+    string output_filename (argv [4]);
+
+    cl_float3 source = {0, 0, 0, 0};
+    cl_float3 mic = {0, 0, 1, 0};
+
+    auto numRays = 1024 * 32;
+    auto numImpulses = 64;
+
+    auto sampleRate = 44100.0;
+    auto bitDepth = 16;
+
+    Document document;
+    attemptJsonParse (config_filename, document);
+    if (! document.IsObject())
+    {
+        cerr << "Rayverb config must be stored in a JSON object" << endl;
+        return 1;
+    }
+
+    map <RequiredKeys, string> requiredKeys
+    {   {SOURCE_POSITION, "source_position"}
+    ,   {MIC_POSITION, "mic_position"}
+    ,   {RAYS, "rays"}
+    ,   {REFLECTIONS, "reflections"}
+    ,   {SAMPLE_RATE, "sample_rate"}
+    ,   {BIT_DEPTH, "bit_depth"}
     };
 
-    const unsigned long NUM_RAYS = 1024 * 32;
-    const unsigned long NUM_IMPULSES = 64;
+    for (const auto & i : requiredKeys)
+    {
+        if (! document.HasMember (i.second.c_str()))
+        {
+            cerr << "Key '" << i.second << "' is required in json configuration object" << endl;
+            return 1;
+        }
+    }
 
-    vector <cl_float3> directions = getRandomDirections (NUM_RAYS);
+    for (const auto & i : {SOURCE_POSITION, MIC_POSITION})
+    {
+        auto str = requiredKeys [i].c_str();
+        if (! validateJson3dVector (document [str]))
+        {
+            cerr << "Value for " << str << " must be a 3-element numeric array" << endl;
+            return 1;
+        }
+    }
+
+    for (const auto & i : {RAYS, REFLECTIONS, SAMPLE_RATE, BIT_DEPTH})
+    {
+        auto str = requiredKeys [i].c_str();
+        if (! document [str].IsNumber())
+        {
+            cerr << "Value for " << str << " must be a number" << endl;
+            return 1;
+        }
+    }
+
+    source = getJson3dVector (document [requiredKeys [SOURCE_POSITION].c_str()]);
+    mic = getJson3dVector (document [requiredKeys [MIC_POSITION].c_str()]);
+
+    numRays = document [requiredKeys [RAYS].c_str()].GetInt();
+    numImpulses = document [requiredKeys [REFLECTIONS].c_str()].GetInt();
+    sampleRate = document [requiredKeys [SAMPLE_RATE].c_str()].GetInt();
+    bitDepth = document [requiredKeys [BIT_DEPTH].c_str()].GetInt();
+
+    map <AttenuationMode, string> modeKeys
+    {   {SPEAKER, "speakers"}
+    ,   {HRTF, "hrtf"}
+    };
+
+    auto mode = HRTF;
+    cl_float3 facing = {0, 0, 1};
+    cl_float3 up = {0, 1, 0};
+    vector <Speaker> speakers;
+
+    auto count = 0;
+    for (const auto & i : modeKeys)
+    {
+        if (document.HasMember (i.second.c_str()))
+            ++count;
+    }
+
+    if (count != 1)
+    {
+        cerr << "Config object must contain information for exactly one of these keys:" << endl;
+        for (const auto & i : modeKeys)
+            cerr << "    " << i.second << endl;
+
+        return 1;
+    }
+
+    if (document.HasMember (modeKeys [SPEAKER].c_str()))
+    {
+        mode = SPEAKER;
+        Value & v = document [modeKeys [SPEAKER].c_str()];
+
+        if (! v.IsArray())
+        {
+            cerr << "Speaker definitions must be stored in a json array" << endl;
+            return 1;
+        }
+
+        for (auto i = v.Begin(); i != v.End(); ++i)
+        {
+            auto direction = "direction";
+
+            if (! i->HasMember (direction))
+            {
+                cerr << "Speaker definition must contain direction vector" << endl;
+                return 1;
+            }
+
+            if (! validateJson3dVector ((*i) [direction]))
+            {
+                cerr << "Value for " << direction << " must be a 3-element numeric array" << endl;
+                return 1;
+            }
+
+            auto shape = "shape";
+
+            if (! i->HasMember (shape))
+            {
+                cerr << "Speaker definition must contain shape parameter" << endl;
+                return 1;
+            }
+
+            if (! (*i) [shape].IsNumber())
+            {
+                cerr << "Value for " << shape << " must be a number" << endl;
+                return 1;
+            }
+
+            speakers.push_back
+            (   {   normalize (getJson3dVector ((*i) [direction]))
+                ,   static_cast <cl_float> ((*i) [shape].GetDouble())
+                }
+            );
+        }
+    }
+    else if (document.HasMember (modeKeys [HRTF].c_str()))
+    {
+        mode = HRTF;
+        Value & v = document [modeKeys [HRTF].c_str()];
+
+        auto facing_str = "facing";
+        auto up_str = "up";
+
+        if (! v.HasMember (facing_str))
+        {
+            cerr << "HRTF definition must contain " << facing_str << " vector" << endl;
+            return 1;
+        }
+
+        if (! v.HasMember (up_str))
+        {
+            cerr << "HRTF definition must contain " << up_str << " vector" << endl;
+            return 1;
+        }
+
+        if (! validateJson3dVector (v [facing_str]))
+        {
+            cerr << "Value for " << facing_str << " must be a 3-element numeric array" << endl;
+            return 1;
+        }
+
+        if (! validateJson3dVector (v [up_str]))
+        {
+            cerr << "Value for " << up_str << " must be a 3-element numeric array" << endl;
+            return 1;
+        }
+
+        facing = normalize (getJson3dVector (v [facing_str]));
+        up = normalize (getJson3dVector (v [up_str]));
+    }
+
+    auto directions = getRandomDirections (numRays);
     vector <vector <Impulse>> attenuated;
-    vector <vector <Impulse>> hrtf;
 
     try
     {
@@ -101,16 +343,30 @@ int main(int argc, const char * argv[])
 
         Scene scene
         (   context
-        ,   NUM_IMPULSES
+        ,   numImpulses
         ,   directions
-        ,   TEST_FILE
-        ,   "../../mat_updated.json"
+        ,   model_filename
+        ,   material_filename
         );
 
         scene.trace (mic, source);
 
-        attenuated = scene.attenuate (speakers);
-        hrtf = scene.hrtf ("../../hrtf_analysis/IRC1050.json");
+        switch (mode)
+        {
+        case SPEAKER:
+            attenuated = scene.attenuate (speakers);
+            break;
+        case HRTF:
+            attenuated = scene.hrtf
+            (   "../../hrtf_analysis/IRC1050.json"
+            ,   facing
+            ,   up
+            );
+            break;
+        default:
+            cerr << "This point should never be reached. Aborting" << endl;
+            return 1;
+        }
     }
     catch (cl::Error error)
     {
@@ -130,10 +386,7 @@ int main(int argc, const char * argv[])
         return 1;
     }
 
-    const float SAMPLE_RATE = 44100;
-
-    flatten_and_write ("speaker.aiff", attenuated, SAMPLE_RATE);
-    flatten_and_write ("hrtf.aiff", hrtf, SAMPLE_RATE);
+    flatten_and_write (output_filename, attenuated, sampleRate, bitDepth);
 
     return 0;
 }

@@ -1,0 +1,10 @@
+{
+    "source_position": [0, -50, 20],
+    "mic_position": [-5, -55, 25],
+    "rays": 32768,
+    "reflections": 64,
+    "sample_rate": 44100,
+    "bit_depth": 16,
+    "speakers": [   {"direction": [1, 0, 0], "shape": 0.5},
+                    {"direction": [0, 1, 0], "shape": 0.5}]
+}

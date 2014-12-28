@@ -2,6 +2,8 @@
 
 #include "filters.h"
 
+#include "rapidjson/document.h"
+
 //#define DIAGNOSTIC
 
 #define __CL_ENABLE_EXCEPTIONS
@@ -178,8 +180,16 @@ public:
     (   const std::vector <Speaker> & speakers
     );
 
-    std::vector <Impulse> hrtf (unsigned long channel);
-    std::vector <std::vector <Impulse>> hrtf (const std::string & file);
+    std::vector <Impulse> hrtf
+    (   unsigned long channel
+    ,   const cl_float3 & facing
+    ,   const cl_float3 & up
+    );
+    std::vector <std::vector <Impulse>> hrtf
+    (   const std::string & file
+    ,   const cl_float3 & facing
+    ,   const cl_float3 & up
+    );
 
 private:
     const unsigned long nrays;
@@ -218,3 +228,8 @@ private:
     ,   bool verbose = false
     );
 };
+
+void attemptJsonParse
+(   const std::string & fname
+,   rapidjson::Document & doc
+);

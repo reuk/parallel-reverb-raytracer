@@ -37,6 +37,9 @@ def main():
 
     out = []
 
+    if plot:
+        filenames = filenames[:3]
+
     for fname in filenames:
         radius, azimuth, elevation = decode_filename(fname)
 
@@ -59,10 +62,10 @@ def main():
         for signal in channels:
             fft = np.fft.rfft(signal)
             freqs = np.fft.rfftfreq(signal.size, 1.0 / sr)
-            plt.plot(freqs, np.abs(fft))
+            plt.plot(freqs, np.power(np.abs(fft), 2))
 
             band_amps = [fft[i:j] for i, j in bin_bands]
-            band_amps = [sum(np.abs(i)) / len(i) for i in band_amps]
+            band_amps = [sum(np.power(np.abs(i), 2)) / len(i) for i in band_amps]
 
             channel_coeffs.append(band_amps)
 

@@ -3,6 +3,7 @@
 *.swp
 *~
 *.aiff
+*.wav
 
 assimp-3.1.1
 build

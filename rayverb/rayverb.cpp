@@ -200,6 +200,17 @@ Scene::Scene
     queue = cl::CommandQueue (cl_context, used_device);
 }
 
+void attemptJsonParse (const string & fname, Document & doc)
+{
+    ifstream in (fname);
+    string file
+    (   (istreambuf_iterator <char> (in))
+    ,   istreambuf_iterator <char>()
+    );
+
+    doc.Parse(file.c_str());
+}
+
 struct Scene::SceneData
 {
 public:
@@ -221,7 +232,7 @@ public:
             );
 
         constexpr unsigned bands = sizeof (VolumeType) / sizeof (float);
-        if (json [key.c_str()].Capacity() != bands)
+        if (json [key.c_str()].Size() != bands)
         {
             stringstream ss;
             ss << "Length of material description array must be " << bands;
@@ -296,15 +307,8 @@ public:
 
         surfaces.push_back (surface);
 
-        ifstream in (materialFileName);
-        string materialFile
-        (   (istreambuf_iterator <char> (in))
-        ,   istreambuf_iterator <char>()
-        );
-
         Document document;
-        document.Parse(materialFile.c_str());
-
+        attemptJsonParse (materialFileName, document);
         if (! document.IsObject())
             throw runtime_error ("Materials must be stored in a JSON object");
 
@@ -712,15 +716,8 @@ Hrtf jsonToHrtfData (const Value & json)
 
 vector <Hrtf> readHrtfFile (const string & file)
 {
-    ifstream in (file);
-    string hrtfFile
-    (   (istreambuf_iterator <char> (in))
-    ,   istreambuf_iterator <char>()
-    );
-
     Document document;
-    document.Parse(hrtfFile.c_str());
-
+    attemptJsonParse (file, document);
     if (! document.IsArray())
         throw runtime_error ("Hrtf data must be stored in a JSON array");
 
@@ -748,7 +745,11 @@ vector <Hrtf> readHrtfFile (const string & file)
     return fields;
 }
 
-vector <vector <Impulse>> Scene::hrtf (const string & file)
+vector <vector <Impulse>> Scene::hrtf
+(   const string & file
+,   const cl_float3 & facing
+,   const cl_float3 & up
+)
 {
     vector <Hrtf> hrtf_vec = readHrtfFile (file);
 
@@ -767,19 +768,22 @@ vector <vector <Impulse>> Scene::hrtf (const string & file)
 
     nhrtf = hrtf_vec.size();
 
-    vector <unsigned long> channels = {0, 1};
-
+    auto channels = {0, 1};
     vector <vector <Impulse>> attenuated (channels.size());
     transform
     (   begin (channels)
     ,   end (channels)
     ,   begin (attenuated)
-    ,   [&] (unsigned long i) {return hrtf (i);}
+    ,   [&] (unsigned long i) {return hrtf (i, facing, up);}
     );
     return attenuated;
 }
 
-vector <Impulse> Scene::hrtf (unsigned long channel)
+vector <Impulse> Scene::hrtf
+(   unsigned long channel
+,   const cl_float3 & facing
+,   const cl_float3 & up
+)
 {
     //  pass data to opencl
     //  for each direction, look up the hrtf coefficients
@@ -805,8 +809,8 @@ vector <Impulse> Scene::hrtf (unsigned long channel)
     ,   nreflections
     ,   cl_hrtf
     ,   nhrtf
-    ,   {1, 0, 0}
-    ,   {0, 1, 0}
+    ,   facing
+    ,   up
     ,   channel
     );
 

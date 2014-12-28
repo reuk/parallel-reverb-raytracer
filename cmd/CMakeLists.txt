@@ -22,7 +22,7 @@ find_library(opencl_library OpenCL)
 mark_as_advanced(opencl_library)
 set(frameworks ${opencl_library})
 
-set(libraries rayverb gflags assimp sndfile ${frameworks})
+set(libraries rayverb assimp sndfile ${frameworks})
 
 target_link_libraries(${name} ${libraries})
 

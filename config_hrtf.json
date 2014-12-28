@@ -1,0 +1,9 @@
+{
+    "source_position": [0, -50, 20],
+    "mic_position": [-5, -55, 25],
+    "rays": 32768,
+    "reflections": 64,
+    "sample_rate": 44100,
+    "bit_depth": 16,
+    "hrtf": {"facing": [0, 0, 1], "up": [0, 1, 0]}
+}
