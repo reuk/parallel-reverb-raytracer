@@ -179,13 +179,7 @@ Scene::Scene
     ,   directions.size() * nreflections * sizeof (Impulse)
     )
 {
-    ifstream cl_source_file ("kernel.cl");
-    string cl_source_string
-    (   (istreambuf_iterator <char> (cl_source_file))
-    ,   istreambuf_iterator <char> ()
-    );
-
-    cl_program = cl::Program (cl_context, cl_source_string, false);
+    cl_program = cl::Program (cl_context, KERNEL_STRING, false);
 
     vector <cl::Device> device = cl_context.getInfo <CL_CONTEXT_DEVICES>();
     vector <cl::Device> used_devices (device.end() - 1, device.end());

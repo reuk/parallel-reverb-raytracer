@@ -11,7 +11,7 @@ include_directories(
 )
 
 set(name parallel_raytrace)
-set(sources main.cpp helpers.cpp rayverb.cpp filters.cpp)
+set(sources main.cpp helpers.cpp rayverb.cpp filters.cpp kernel.cpp)
 
 find_library(opencl_library OpenCL)
 mark_as_advanced(opencl_library)
@@ -22,7 +22,3 @@ set(libraries assimp fftw3f sndfile ${frameworks})
 add_executable(${name} ${sources})
 
 target_link_libraries(${name} ${libraries})
-
-file(COPY
-    ${CMAKE_CURRENT_SOURCE_DIR}/kernel.cl
-    DESTINATION ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})

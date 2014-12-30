@@ -233,3 +233,5 @@ void attemptJsonParse
 (   const std::string & fname
 ,   rapidjson::Document & doc
 );
+
+extern const std::string KERNEL_STRING;

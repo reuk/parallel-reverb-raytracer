@@ -1,3 +1,9 @@
+#include "rayverb.h"
+
+using namespace std;
+
+const string KERNEL_STRING (R"(
+
 #define EPSILON (0.0001f)
 #define NULL (0)
 #define THRESHOLD (0.001f)
@@ -438,3 +444,5 @@ kernel void hrtf
         };
     }
 }
+
+)");
