@@ -1,8 +1,6 @@
 #include "rayverb.h"
 
-using namespace std;
-
-const string KERNEL_STRING (R"(
+const std::string KERNEL_STRING (R"(
 
 #define EPSILON (0.0001f)
 #define NULL (0)
@@ -53,11 +51,6 @@ typedef struct {
     float3 direction;
     float coefficient;
 } Speaker;
-
-typedef struct {
-    int azimuth, elevation;
-    VolumeType coefficients [2];
-} Hrtf;
 
 
 float triangle_intersection
@@ -370,27 +363,23 @@ float3 transform (float3 pointing, float3 up, float3 d)
 float azimuth (float3 d);
 float azimuth (float3 d)
 {
-    return atan2(d.y, d.x);
+    return atan2(d.z, d.x);
 }
 
 float elevation (float3 d);
 float elevation (float3 d)
 {
-    return atan2(d.z, length(d.xy));
+    return atan2(d.y, length(d.xz));
 }
 
 VolumeType hrtf_attenuation
 (   global VolumeType * hrtfData
-,   unsigned long azimuths
-,   unsigned long elevations
 ,   float3 pointing
 ,   float3 up
 ,   float3 impulseDirection
 );
 VolumeType hrtf_attenuation
 (   global VolumeType * hrtfData
-,   unsigned long azimuths
-,   unsigned long elevations
 ,   float3 pointing
 ,   float3 up
 ,   float3 impulseDirection
@@ -398,19 +387,12 @@ VolumeType hrtf_attenuation
 {
     float3 transformed = transform(pointing, up, impulseDirection);
 
-    //  AZIMUTH measured from 0 (straight ahead) to two pi in AZIMUTHS intervals
-    //  ELEVATION measured from 0 (up) to pi (down) with straight being pi / 2,
-    //  in ELEVATIONS intervals
-    //
-    //  convert azimuth and elevation to steps in the range 0 < AZIMUTHS and
-    //  0 < ELEVATIONS
-    //
-    //  look up in hrtfData using a + e * AZIMUTHS
+    unsigned long a = degrees(azimuth(transformed));
+    unsigned long e = degrees(elevation(transformed));
+    e = 90 - e;
 
-    unsigned long a = 0;
-    unsigned long e = 0;
-
-    return hrtfData[e * azimuths + a];
+    //return hrtfData[e * 360 + a];
+    return hrtfData[a * 180 + e];
 }
 
 kernel void hrtf
@@ -418,8 +400,6 @@ kernel void hrtf
 ,   global Impulse * impulsesOut
 ,   unsigned long outputOffset
 ,   global VolumeType * hrtfData
-,   unsigned long azimuths
-,   unsigned long elevations
 ,   float3 pointing
 ,   float3 up
 )
@@ -430,8 +410,6 @@ kernel void hrtf
     {
         const VolumeType ATTENUATION = hrtf_attenuation
         (   hrtfData
-        ,   azimuths
-        ,   elevations
         ,   pointing
         ,   up
         ,   impulsesIn [j].direction

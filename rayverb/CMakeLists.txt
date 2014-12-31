@@ -11,7 +11,7 @@ include_directories(
 )
 
 set(name parallel_raytrace)
-set(sources main.cpp helpers.cpp rayverb.cpp filters.cpp kernel.cpp)
+set(sources main.cpp helpers.cpp rayverb.cpp filters.cpp kernel.cpp hrtf.cpp)
 
 find_library(opencl_library OpenCL)
 mark_as_advanced(opencl_library)

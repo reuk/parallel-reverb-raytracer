@@ -648,119 +648,16 @@ vector <vector <Impulse>> Scene::attenuate (const vector <Speaker> & speakers)
     return attenuated;
 }
 
-Hrtf jsonToHrtfData (const Value & json)
-{
-    if (! json.IsArray())
-        throw runtime_error ("Hrtf must be a JSON array");
-
-    if (json.Size() != 2)
-        throw runtime_error ("Hrtf array length must be 2");
-
-    if (! json [(SizeType) 0].IsObject())
-        throw runtime_error ("Hrtf array first item must be a descriptor object");
-    if (! json [(SizeType) 1].IsArray())
-        throw runtime_error ("Hrtf array second item must be an array of arrays of coefficients");
-
-    if (! json [(SizeType) 0].HasMember ("r"))
-        throw runtime_error ("Hrtf descriptor object must contain radius 'r'");
-    if (! json [(SizeType) 0].HasMember ("a"))
-        throw runtime_error ("Hrtf descriptor object must contain azimuth 'a'");
-    if (! json [(SizeType) 0].HasMember ("e"))
-        throw runtime_error ("Hrtf descriptor object must contain elevation 'e'");
-
-    if (! json [(SizeType) 0] ["r"].IsNumber())
-        throw runtime_error ("Hrtf radius must be numerical");
-    if (! json [(SizeType) 0] ["a"].IsNumber())
-        throw runtime_error ("Hrtf azimuth must be numerical");
-    if (! json [(SizeType) 0] ["e"].IsNumber())
-        throw runtime_error ("Hrtf elevation must be numerical");
-
-    constexpr unsigned bands = sizeof (VolumeType) / sizeof (float);
-
-    if (json [(SizeType) 1].Size() != 2)
-        throw runtime_error ("Hrtf array second item must contain data for two channels");
-
-    if
-    (   !
-        (   json [(SizeType) 1] [(SizeType) 0].IsArray()
-        &&  json [(SizeType) 1] [(SizeType) 1].IsArray()
-        )
-    )
-        throw runtime_error ("Hrtf coefficients must be stored in json arrays");
-
-    if
-    (   json [(SizeType) 1] [(SizeType) 0].Size() != bands
-    ||  json [(SizeType) 1] [(SizeType) 1].Size() != bands
-    )
-        throw runtime_error ("Hrtf coefficient array has incorrect length");
-
-    VolumeType vt_l;
-    VolumeType vt_r;
-    for (int i = 0; i != bands; ++i)
-    {
-        vt_l.s [i] = json [(SizeType) 1] [(SizeType) 0] [i].GetDouble();
-        vt_r.s [i] = json [(SizeType) 1] [(SizeType) 1] [i].GetDouble();
-    }
-
-    const cl_int a = json [(SizeType) 0] ["a"].GetInt();
-    const cl_int e = json [(SizeType) 0] ["e"].GetInt();
-
-    return (Hrtf) {a, e, vt_l, vt_r};
-}
-
-vector <Hrtf> readHrtfFile (const string & file)
-{
-    Document document;
-    attemptJsonParse (file, document);
-    if (! document.IsArray())
-        throw runtime_error ("Hrtf data must be stored in a JSON array");
-
-    vector <Hrtf> fields;
-
-    for
-    (   Value::ConstValueIterator i = document.Begin()
-    ;   i != document.End()
-    ;   ++i
-    )
-        fields.push_back (jsonToHrtfData (*i));
-
-    sort
-    (   begin (fields)
-    ,   end (fields)
-    ,   [&] (const Hrtf & i, const Hrtf & j)
-        {
-            if (i.azimuth == j.azimuth)
-                return i.elevation < j.elevation;
-            else
-                return i.azimuth < j.azimuth;
-        }
-    );
-
-    return fields;
-}
-
 vector <vector <Impulse>> Scene::hrtf
-(   const string & file
-,   const cl_float3 & facing
+(   const cl_float3 & facing
 ,   const cl_float3 & up
 )
 {
-    vector <Hrtf> hrtf_vec = readHrtfFile (file);
-
     cl_hrtf = cl::Buffer
     (   cl_context
     ,   CL_MEM_READ_WRITE
-    ,   hrtf_vec.size() * sizeof (Hrtf)
+    ,   sizeof (HRTF_DATA) / 2
     );
-
-    cl::copy
-    (   queue
-    ,   begin (hrtf_vec)
-    ,   end (hrtf_vec)
-    ,   cl_hrtf
-    );
-
-    nhrtf = hrtf_vec.size();
 
     auto channels = {0, 1};
     vector <vector <Impulse>> attenuated (channels.size());
@@ -779,22 +676,21 @@ vector <Impulse> Scene::hrtf
 ,   const cl_float3 & up
 )
 {
-    //  pass data to opencl
-    //  for each direction, look up the hrtf coefficients
-    //  multiply the impulse at that direction by the coefficients
-    //  return
+    cl::copy
+    (   queue
+    ,   begin (HRTF_DATA [channel])
+    ,   end (HRTF_DATA [channel])
+    ,   cl_hrtf
+    );
+
     auto hrtf = cl::make_kernel
     <   cl::Buffer
     ,   cl::Buffer
     ,   cl_ulong
     ,   cl::Buffer
-    ,   cl_ulong
     ,   cl_float3
     ,   cl_float3
-    ,   cl_ulong
     > (cl_program, "hrtf");
-
-    //  remember to keep pointing and up normalized!
 
     hrtf
     (   cl::EnqueueArgs (queue, cl::NDRange (nrays))
@@ -802,10 +698,8 @@ vector <Impulse> Scene::hrtf
     ,   cl_attenuated
     ,   nreflections
     ,   cl_hrtf
-    ,   nhrtf
     ,   facing
     ,   up
-    ,   channel
     );
 
     vector <Impulse> attenuated (nreflections * nrays);

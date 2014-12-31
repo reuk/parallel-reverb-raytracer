@@ -1,9 +1,3 @@
-//
-//  config reading
-//  commandline parsing
-//  hrtf data conversion + whatever
-//
-
 #include "rayverb.h"
 #include "helpers.h"
 
@@ -88,24 +82,6 @@ void flatten_and_write
     );
     write_aiff (fname, outdata, sr, bd);
 }
-
-//  model file
-//  source position
-//  mic position
-//  speakers - any number
-//      direction
-//      quality
-//  hrtf
-//      pointing
-//      up
-//      hrtf file
-//  material file
-//  output filename
-//  filtering method
-//  sampling rate
-//  bit depth
-//  ray number
-//  reflection number
 
 bool validateJson3dVector (const Value & value)
 {
@@ -357,11 +333,7 @@ int main(int argc, const char * argv[])
             attenuated = scene.attenuate (speakers);
             break;
         case HRTF:
-            attenuated = scene.hrtf
-            (   "../../hrtf_analysis/IRC1050.json"
-            ,   facing
-            ,   up
-            );
+            attenuated = scene.hrtf(facing, up);
             break;
         default:
             cerr << "This point should never be reached. Aborting" << endl;

@@ -13,7 +13,7 @@
 #include <cmath>
 #include <numeric>
 #include <iostream>
-
+#include <array>
 //  These definitions MUST be kept up-to-date with the defs in the cl file.
 //  It might make sense to nest them inside the Scene because I don't think
 //  other classes will need the same data formats.
@@ -64,13 +64,6 @@ typedef struct  {
 } _Speaker_unalign;
 
 typedef _Speaker_unalign __attribute__ ((aligned(8))) Speaker;
-
-typedef struct  {
-    cl_int azimuth, elevation;
-    VolumeType coefficients [2];
-} _Hrtf_unalign;
-
-typedef _Hrtf_unalign __attribute__ ((aligned(8))) Hrtf ;
 
 std::vector <VolumeType> flattenImpulses
 (   const std::vector <Impulse> & impulse
@@ -186,8 +179,7 @@ public:
     ,   const cl_float3 & up
     );
     std::vector <std::vector <Impulse>> hrtf
-    (   const std::string & file
-    ,   const cl_float3 & facing
+    (   const cl_float3 & facing
     ,   const cl_float3 & up
     );
 
@@ -235,3 +227,4 @@ void attemptJsonParse
 );
 
 extern const std::string KERNEL_STRING;
+extern const std::array <std::array <std::array <cl_float8, 180>, 360>, 2> HRTF_DATA;
