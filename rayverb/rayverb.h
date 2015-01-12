@@ -219,12 +219,12 @@ private:
     ,   SceneData sceneData
     ,   bool verbose = false
     );
+
+    static const std::string KERNEL_STRING;
+    static const std::array <std::array <std::array <cl_float8, 180>, 360>, 2> HRTF_DATA;
 };
 
 void attemptJsonParse
 (   const std::string & fname
 ,   rapidjson::Document & doc
 );
-
-extern const std::string KERNEL_STRING;
-extern const std::array <std::array <std::array <cl_float8, 180>, 360>, 2> HRTF_DATA;

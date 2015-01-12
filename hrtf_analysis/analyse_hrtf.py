@@ -29,7 +29,7 @@ def write_file(data, outfile):
     out = """
     #include "rayverb.h"
     //  [channel][azimuth][elevation]
-    const std::array <std::array <std::array <VolumeType, 180>, 360>, 2> HRTF_DATA =
+    const std::array <std::array <std::array <VolumeType, 180>, 360>, 2> Scene::HRTF_DATA =
     """
 
     l = []
@@ -114,7 +114,6 @@ def write_file(data, outfile):
 def main():
     parser = argparse.ArgumentParser(description="Analyse HRTF kernels.")
     parser.add_argument("folderpath", type=str, help="folder full of HRTF kernels")
-    parser.add_argument("outfile", type=str, help="file to which to write output")
     args = parser.parse_args()
 
     filenames = [f for f in listdir(args.folderpath) if isfile(join(args.folderpath, f))]
@@ -168,8 +167,8 @@ def main():
 
         out.append([{'r': radius, 'a': azimuth, 'e': elevation}, channel_coeffs])
 
-    with open(args.outfile, 'w') as f:
-        json.dump(out, f)
+    # with open(args.outfile, 'w') as f:
+    #     json.dump(out, f)
 
     write_file(out, join("rayverb", "hrtf.cpp"))
 

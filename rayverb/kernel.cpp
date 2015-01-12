@@ -1,6 +1,6 @@
 #include "rayverb.h"
 
-const std::string KERNEL_STRING (R"(
+const std::string Scene::KERNEL_STRING (R"(
 
 #define EPSILON (0.0001f)
 #define NULL (0)
@@ -391,7 +391,6 @@ VolumeType hrtf_attenuation
     unsigned long e = degrees(elevation(transformed));
     e = 90 - e;
 
-    //return hrtfData[e * 360 + a];
     return hrtfData[a * 180 + e];
 }
 

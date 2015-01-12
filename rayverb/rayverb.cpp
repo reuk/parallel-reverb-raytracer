@@ -656,7 +656,7 @@ vector <vector <Impulse>> Scene::hrtf
     cl_hrtf = cl::Buffer
     (   cl_context
     ,   CL_MEM_READ_WRITE
-    ,   sizeof (HRTF_DATA) / 2
+    ,   sizeof (VolumeType) * 360 * 180
     );
 
     auto channels = {0, 1};
@@ -676,10 +676,19 @@ vector <Impulse> Scene::hrtf
 ,   const cl_float3 & up
 )
 {
+    vector <VolumeType> hrtfChannelData (360 * 180);
+
+    auto offset = 0;
+    for (auto && i : HRTF_DATA [channel])
+    {
+        copy (begin (i), end (i), hrtfChannelData.begin() + offset);
+        offset += i.size();
+    }
+
     cl::copy
     (   queue
-    ,   begin (HRTF_DATA [channel])
-    ,   end (HRTF_DATA [channel])
+    ,   begin (hrtfChannelData)
+    ,   end (hrtfChannelData)
     ,   cl_hrtf
     );
 
