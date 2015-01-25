@@ -52,21 +52,15 @@ typedef struct {
     float coefficient;
 } Speaker;
 
+typedef struct {
+    float3 v0;
+    float3 v1;
+    float3 v2;
+} TriangleVerts;
 
-float triangle_intersection
-(   global Triangle * triangle
-,   global float3 * vertices
-,   Ray * ray
-);
-float triangle_intersection
-(   global Triangle * triangle
-,   global float3 * vertices
-,   Ray * ray
-)
+float triangle_vert_intersection (float3 v0, float3 v1, float3 v2, Ray * ray);
+float triangle_vert_intersection (float3 v0, float3 v1, float3 v2, Ray * ray)
 {
-    float3 v0 = vertices [triangle->v0];
-    float3 v1 = vertices [triangle->v1];
-    float3 v2 = vertices [triangle->v2];
     float3 e0 = v1 - v0;
     float3 e1 = v2 - v0;
 
@@ -92,6 +86,34 @@ float triangle_intersection
     return invdet * dot (e1, qvec);
 }
 
+float triangle_intersection
+(   global Triangle * triangle
+,   global float3 * vertices
+,   Ray * ray
+);
+float triangle_intersection
+(   global Triangle * triangle
+,   global float3 * vertices
+,   Ray * ray
+)
+{
+    return triangle_vert_intersection
+    (   vertices [triangle->v0]
+    ,   vertices [triangle->v1]
+    ,   vertices [triangle->v2]
+    ,   ray
+    );
+}
+
+float3 triangle_verts_normal (TriangleVerts * t);
+float3 triangle_verts_normal (TriangleVerts * t)
+{
+    float3 e0 = t->v1 - t->v0;
+    float3 e1 = t->v2 - t->v0;
+
+    return normalize (cross (e0, e1));
+}
+
 float3 triangle_normal
 (   global Triangle * triangle
 ,   global float3 * vertices
@@ -101,13 +123,12 @@ float3 triangle_normal
 ,   global float3 * vertices
 )
 {
-    float3 v0 = vertices [triangle->v0];
-    float3 v1 = vertices [triangle->v1];
-    float3 v2 = vertices [triangle->v2];
-    float3 e0 = v1 - v0;
-    float3 e1 = v2 - v0;
-
-    return normalize (cross (e0, e1));
+    TriangleVerts t =
+    {   vertices [triangle->v0]
+    ,   vertices [triangle->v1]
+    ,   vertices [triangle->v2]
+    };
+    return triangle_verts_normal (&t);
 }
 
 float3 reflect (float3 normal, float3 direction);
@@ -161,9 +182,12 @@ Intersection ray_triangle_intersection
     {
         global Triangle * thisTriangle = triangles + i;
         float distance = triangle_intersection (thisTriangle, vertices, ray);
-        if (distance > EPSILON &&
-            ((ret.primitive == NULL) ||
-             (ret.primitive != NULL && distance < ret.distance)))
+        if
+        (   distance > EPSILON
+        &&  (   (ret.primitive == NULL)
+            ||  (ret.primitive != NULL && distance < ret.distance)
+            )
+        )
         {
             ret = (Intersection) {thisTriangle, distance};
         }
@@ -187,20 +211,19 @@ bool anyAbove (VolumeType in, float thresh)
     return false;
 }
 
-constant VolumeType AIR_COEFFICIENT =
-{   0.001 * -0.1
-,   0.001 * -0.2
-,   0.001 * -0.5
-,   0.001 * -1.1
-,   0.001 * -2.7
-,   0.001 * -9.4
-,   0.001 * -29.0
-,   0.001 * -60.0
-};
-
 VolumeType air_attenuation_for_distance (float distance);
 VolumeType air_attenuation_for_distance (float distance)
 {
+    const VolumeType AIR_COEFFICIENT =
+    {   0.001 * -0.1
+    ,   0.001 * -0.2
+    ,   0.001 * -0.5
+    ,   0.001 * -1.1
+    ,   0.001 * -2.7
+    ,   0.001 * -9.4
+    ,   0.001 * -29.0
+    ,   0.001 * -60.0
+    };
     return float8 (1.0) * pow (M_E, distance * AIR_COEFFICIENT);
 }
 
@@ -219,6 +242,31 @@ VolumeType attenuation_for_distance (float distance)
     );
 }
 
+//  for each intersection up to a certain level
+//      reflect the mic in all of the previous planes
+//      check that a ray from source to mic intersects all intermediate surfaces
+//      if it does, add impulse to output array
+
+float3 mirror_point (float3 p, TriangleVerts * t);
+float3 mirror_point (float3 p, TriangleVerts * t)
+{
+    float3 n = triangle_verts_normal (t);
+    float dist = dot (n, p - t->v0);
+    return p + -n * dist * 2;
+}
+
+TriangleVerts mirror_verts (TriangleVerts * in, TriangleVerts * t);
+TriangleVerts mirror_verts (TriangleVerts * in, TriangleVerts * t)
+{
+    return (TriangleVerts)
+    {   mirror_point (in->v0, t)
+    ,   mirror_point (in->v1, t)
+    ,   mirror_point (in->v2, t)
+    };
+}
+
+#define NUM_IMAGE_SOURCE 10
+
 kernel void raytrace
 (   global float3 * directions
 ,   float3 position
@@ -228,14 +276,28 @@ kernel void raytrace
 ,   float3 source
 ,   global Surface * surfaces
 ,   global Impulse * impulses
+,   global Impulse * image_source
 ,   unsigned long outputOffset
 )
 {
     size_t i = get_global_id (0);
 
+    //  This is really a recursive algorithm, but I've implemented it
+    //  iteratively.
+    //  These variables will be updated as the ray is traced.
+
+    //  These variables relate to the ray itself, and are used for the diffuse
+    //  trace.
     Ray ray = {source, directions [i]};
     float distance = 0;
     VolumeType volume = 1;
+
+    //  These variables are for image_source approximation.
+    TriangleVerts prev_primitives [NUM_IMAGE_SOURCE];
+    float3 mic_reflection = position;
+    //  The image_source volume is started at a relatively much quieter volume
+    //  because otherwise it completely overpowers the diffuse trace.
+    float image_volume = 0.0000001;
 
     for
     (   unsigned long index = 0
@@ -243,6 +305,8 @@ kernel void raytrace
     ;   ++index
     )
     {
+        //  Check for an intersection between the current ray and all the
+        //  scene geometry.
         Intersection closest = ray_triangle_intersection
         (   &ray
         ,   triangles
@@ -250,9 +314,77 @@ kernel void raytrace
         ,   vertices
         );
 
+        //  If there's no intersection, the ray's somehow shot into empty space
+        //  and we should stop tracing.
         if (closest.primitive == NULL)
         {
             break;
+        }
+
+        //  If we're fewer than NUM_IMAGE_SOURCE layers deep, the ray can be
+        //  used to check for early reflections.
+        if (index < NUM_IMAGE_SOURCE)
+        {
+            //  Get the vertex data of the intersected triangle.
+            TriangleVerts current =
+            {   vertices [closest.primitive->v0]
+            ,   vertices [closest.primitive->v1]
+            ,   vertices [closest.primitive->v2]
+            };
+
+            //  For each of the previous triangles that have been intersected,
+            //  reflect this triangle in those ones.
+            for (unsigned int k = 0; k != index; ++k)
+            {
+                current = mirror_verts (&current, prev_primitives + index);
+            }
+
+            //  Now add the reflected triangle to the list of previously struck
+            //  triangles.
+            prev_primitives [index] = current;
+
+            //  Reflect the previous microphone image in the newest triangle.
+            mic_reflection = mirror_point (mic_reflection, &current);
+
+            const float3 DIFF = source - mic_reflection;
+            const float DIST = length (DIFF);
+            const float3 DIR = normalize (DIFF);
+
+            //  Check whether a ray from the source to the new microphone image
+            //  intersects all of the intermediate triangles.
+            Ray toMic = {source, DIR};
+            bool intersects = true;
+            for (unsigned int k = 0; k != index && intersects; ++k)
+            {
+                const float tvi = triangle_vert_intersection
+                (   prev_primitives [k].v0
+                ,   prev_primitives [k].v1
+                ,   prev_primitives [k].v2
+                ,   &toMic
+                );
+
+                if (tvi <= EPSILON)
+                {
+                    intersects = false;
+                }
+            }
+
+            //  If the ray intersects all the triangles, and the distance from
+            //  source to microphone image is less than a certain value,
+            //  the reflection pattern is valid for an early reflection
+            //  contribution.
+            const float EARLY_REF_SECONDS = 30;
+            if (intersects && DIST < SPEED_OF_SOUND * EARLY_REF_SECONDS)
+            {
+                image_source [i * NUM_IMAGE_SOURCE + index] = (Impulse)
+                {   (VolumeType) image_volume
+                ,   DIR
+                ,   SECONDS_PER_METER * DIST
+                };
+            }
+
+            //  Flip the phase of the reflection contribution.
+            image_volume = -image_volume;
         }
 
         float3 intersection = ray.position + ray.direction * closest.distance;
@@ -269,9 +401,9 @@ kernel void raytrace
         ,   newDist
         };
 
-        float3 vecToMic = position - reflection.position;
-        float mag = length (vecToMic);
-        float3 direction = normalize (vecToMic);
+        const float3 vecToMic = position - reflection.position;
+        const float mag = length (vecToMic);
+        const float3 direction = normalize (vecToMic);
         Ray toMic = {intersection, direction};
 
         Intersection inter = ray_triangle_intersection
@@ -283,8 +415,7 @@ kernel void raytrace
 
         if (inter.primitive == NULL || inter.distance > mag)
         {
-            const float DIST = reflection.distance + inter.distance;
-            const float TIME = SECONDS_PER_METER * DIST;
+            const float DIST = reflection.distance + mag;
             const float DIFF = dot (reflection.normal, -direction);
             if (DIFF > 0)
             {
@@ -295,7 +426,7 @@ kernel void raytrace
                     *   DIFF
                     )
                 ,   -direction
-                ,   TIME
+                ,   SECONDS_PER_METER * DIST
                 };
             }
         }

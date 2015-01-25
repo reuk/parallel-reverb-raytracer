@@ -168,6 +168,7 @@ public:
     );
 
     std::vector <Impulse> attenuate (const Speaker & speaker);
+    std::vector <Impulse> getRaw();
 
     std::vector <std::vector <Impulse>>  attenuate
     (   const std::vector <Speaker> & speakers
@@ -222,6 +223,10 @@ private:
 
     static const std::string KERNEL_STRING;
     static const std::array <std::array <std::array <cl_float8, 180>, 360>, 2> HRTF_DATA;
+
+    static const cl_ulong IMAGE_SOURCE_REFLECTIONS = 10;
+
+    cl::Buffer cl_image_source;
 };
 
 void attemptJsonParse

@@ -140,7 +140,7 @@ int main(int argc, const char * argv[])
     cl_float3 source = {0, 0, 0, 0};
     cl_float3 mic = {0, 0, 1, 0};
 
-    auto numRays = 1024 * 32;
+    auto numRays = 1024 * 8;
     auto numImpulses = 64;
 
     auto sampleRate = 44100.0;

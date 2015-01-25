@@ -178,6 +178,11 @@ Scene::Scene
     ,   CL_MEM_READ_WRITE
     ,   directions.size() * nreflections * sizeof (Impulse)
     )
+,   cl_image_source
+    (   cl_context
+    ,   CL_MEM_READ_WRITE
+    ,   directions.size() * IMAGE_SOURCE_REFLECTIONS * sizeof (Impulse)
+    )
 {
     cl_program = cl::Program (cl_context, KERNEL_STRING, false);
 
@@ -590,6 +595,7 @@ void Scene::trace (const cl_float3 & micpos, const cl_float3 & source)
     ,   cl_float3
     ,   cl::Buffer
     ,   cl::Buffer
+    ,   cl::Buffer
     ,   cl_ulong
     > (cl_program, "raytrace");
 
@@ -603,6 +609,7 @@ void Scene::trace (const cl_float3 & micpos, const cl_float3 & source)
     ,   source
     ,   cl_surfaces
     ,   cl_impulses
+    ,   cl_image_source
     ,   nreflections
     );
 }
@@ -624,16 +631,34 @@ vector <Impulse> Scene::attenuate (const Speaker & speaker)
     ,   speaker
     );
 
-    vector <Impulse> attenuated (nreflections * nrays);
+    vector <Impulse> a0 (nreflections * nrays);
+    cl::copy (queue, cl_attenuated, begin (a0), end (a0));
 
-    cl::copy
-    (   queue
+    attenuate
+    (   cl::EnqueueArgs (queue, cl::NDRange (nrays))
+    ,   cl_image_source
     ,   cl_attenuated
-    ,   begin (attenuated)
-    ,   end (attenuated)
+    ,   IMAGE_SOURCE_REFLECTIONS
+    ,   speaker
     );
 
-    return attenuated;
+    vector <Impulse> a1 (IMAGE_SOURCE_REFLECTIONS * nrays);
+    cl::copy (queue, cl_attenuated, begin (a1), end (a1));
+
+    a0.insert(a0.end(), a1.begin(), a1.end());
+    return a0;
+}
+
+vector <Impulse> Scene::getRaw()
+{
+    vector <Impulse> raw (IMAGE_SOURCE_REFLECTIONS * nrays);
+    cl::copy
+    (   queue
+    ,   cl_image_source
+    ,   begin (raw)
+    ,   end (raw)
+    );
+    return raw;
 }
 
 vector <vector <Impulse>> Scene::attenuate (const vector <Speaker> & speakers)
@@ -711,14 +736,22 @@ vector <Impulse> Scene::hrtf
     ,   up
     );
 
-    vector <Impulse> attenuated (nreflections * nrays);
+    vector <Impulse> a0 (nreflections * nrays);
+    cl::copy (queue, cl_attenuated, begin (a0), end (a0));
 
-    cl::copy
-    (   queue
+    hrtf
+    (   cl::EnqueueArgs (queue, cl::NDRange (nrays))
+    ,   cl_image_source
     ,   cl_attenuated
-    ,   begin (attenuated)
-    ,   end (attenuated)
+    ,   IMAGE_SOURCE_REFLECTIONS
+    ,   cl_hrtf
+    ,   facing
+    ,   up
     );
 
-    return attenuated;
+    vector <Impulse> a1 (IMAGE_SOURCE_REFLECTIONS * nrays);
+    cl::copy (queue, cl_attenuated, begin (a1), end (a1));
+
+    a0.insert(a0.end(), a1.begin(), a1.end());
+    return a0;
 }
