@@ -4,8 +4,6 @@
 
 #include "rapidjson/document.h"
 
-//#define DIAGNOSTIC
-
 #define __CL_ENABLE_EXCEPTIONS
 #include "cl.hpp"
 
@@ -14,6 +12,9 @@
 #include <numeric>
 #include <iostream>
 #include <array>
+
+//#define DIAGNOSTIC
+
 //  These definitions MUST be kept up-to-date with the defs in the cl file.
 //  It might make sense to nest them inside the Scene because I don't think
 //  other classes will need the same data formats.
@@ -38,22 +39,13 @@ typedef struct  {
 
 typedef _Surface_unalign __attribute__ ((aligned(8))) Surface;
 
-#ifdef DIAGNOSTIC
-typedef struct {
-    cl_ulong surface;
-    cl_float3 position;
-    cl_float3 normal;
-    VolumeType volume;
-    cl_float distance;
-} _Reflection_unalign;
-
-typedef _Reflection_unalign __attribute__ ((aligned(8))) Reflection;
-#endif
-
 typedef struct  {
     VolumeType volume;
     cl_float3 direction;
     cl_float time;
+#ifdef DIAGNOSTIC
+    cl_float3 position;
+#endif
 } _Impulse_unalign;
 
 typedef _Impulse_unalign __attribute__ ((aligned(8))) Impulse;
@@ -155,20 +147,14 @@ public:
     ,   bool verbose = false
     );
 
-#ifdef DIAGNOSTIC
-    std::vector <Reflection> test
-    (   const cl_float3 & micpos
-    ,   const cl_float3 & source
-    );
-#endif
-
     void trace
     (   const cl_float3 & micpos
     ,   const cl_float3 & source
     );
 
     std::vector <Impulse> attenuate (const Speaker & speaker);
-    std::vector <Impulse> getRaw();
+    std::vector <Impulse> getRawDiffuse();
+    std::vector <Impulse> getRawImages();
 
     std::vector <std::vector <Impulse>>  attenuate
     (   const std::vector <Speaker> & speakers
@@ -197,11 +183,6 @@ private:
     cl::Buffer cl_triangles;
     cl::Buffer cl_vertices;
     cl::Buffer cl_surfaces;
-
-#ifdef DIAGNOSTIC
-    cl::Buffer cl_reflections;
-#endif
-
     cl::Buffer cl_impulses;
     cl::Buffer cl_attenuated;
 

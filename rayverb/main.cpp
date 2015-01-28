@@ -312,6 +312,9 @@ int main(int argc, const char * argv[])
 
     auto directions = getRandomDirections (numRays);
     vector <vector <Impulse>> attenuated;
+#ifdef DIAGNOSTIC
+    vector <Impulse> raw;
+#endif
 
     try
     {
@@ -339,6 +342,10 @@ int main(int argc, const char * argv[])
             cerr << "This point should never be reached. Aborting" << endl;
             return 1;
         }
+
+#ifdef DIAGNOSTIC
+        raw = scene.getRawImages();
+#endif
     }
     catch (cl::Error error)
     {
@@ -359,6 +366,11 @@ int main(int argc, const char * argv[])
     }
 
     flatten_and_write (output_filename, attenuated, sampleRate, bitDepth);
+
+#ifdef DIAGNOSTIC
+    //print_diagnostic (numRays, numImpulses, raw);
+    print_diagnostic (numRays, 10, raw);
+#endif
 
     return 0;
 }

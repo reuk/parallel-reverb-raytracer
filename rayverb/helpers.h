@@ -4,10 +4,10 @@
 #include "cl.hpp"
 
 #ifdef DIAGNOSTIC
-void print_diagnostic 
+void print_diagnostic
 (   unsigned long nrays
 ,   unsigned long nreflections
-,   const std::vector <Reflection> & reflections
+,   const std::vector <Impulse> & reflections
 );
 #endif
 

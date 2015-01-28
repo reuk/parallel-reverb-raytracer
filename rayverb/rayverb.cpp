@@ -419,7 +419,7 @@ public:
         }
 
         cerr
-        <<  " mini ["
+        <<  " min ["
         <<  mini.s [0]
         <<  ", "
         <<  mini.s [1]
@@ -428,7 +428,7 @@ public:
         <<  "]"
         <<  endl;
         cerr
-        <<  " maxi ["
+        <<  " max ["
         <<  maxi.s [0]
         <<  ", "
         <<  maxi.s [1]
@@ -534,56 +534,6 @@ Scene::Scene
 {
 }
 
-#ifdef DIAGNOSTIC
-vector <Reflection> Scene::test
-(   const cl_float3 & micpos
-,   const cl_float3 & source
-)
-{
-    auto test = cl::make_kernel
-    <   cl::Buffer
-    ,   cl_float3
-    ,   cl::Buffer
-    ,   unsigned long
-    ,   cl::Buffer
-    ,   cl::Buffer
-    ,   cl::Buffer
-    ,   cl::Buffer
-    ,   unsigned long
-    > (cl_program, "test");
-
-    cl_reflections = cl::Buffer
-    (   cl_context
-    ,   CL_MEM_READ_WRITE
-    ,   nrays * nreflections * sizeof (Reflection)
-    );
-
-    test
-    (   cl::EnqueueArgs (queue, cl::NDRange (nrays))
-    ,   cl_directions
-    ,   micpos
-    ,   cl_triangles
-    ,   ntriangles
-    ,   cl_vertices
-    ,   source
-    ,   cl_surfaces
-    ,   cl_reflections
-    ,   nreflections
-    );
-
-    vector <Reflection> reflections (nrays * nreflections);
-
-    cl::copy
-    (   queue
-    ,   cl_reflections
-    ,   begin (reflections)
-    ,   end (reflections)
-    );
-
-    return reflections;
-}
-#endif
-
 void Scene::trace (const cl_float3 & micpos, const cl_float3 & source)
 {
     auto raytrace = cl::make_kernel
@@ -649,7 +599,19 @@ vector <Impulse> Scene::attenuate (const Speaker & speaker)
     return a0;
 }
 
-vector <Impulse> Scene::getRaw()
+vector <Impulse> Scene::getRawDiffuse()
+{
+    vector <Impulse> raw (nreflections * nrays);
+    cl::copy
+    (   queue
+    ,   cl_impulses
+    ,   begin (raw)
+    ,   end (raw)
+    );
+    return raw;
+}
+
+vector <Impulse> Scene::getRawImages()
 {
     vector <Impulse> raw (IMAGE_SOURCE_REFLECTIONS * nrays);
     cl::copy

@@ -1,10 +1,15 @@
 #include "rayverb.h"
 
-const std::string Scene::KERNEL_STRING (R"(
+const std::string diagnostic
+#ifdef DIAGNOSTIC
+("#define DIAGNOSTIC")
+#endif
+;
+
+const std::string Scene::KERNEL_STRING (diagnostic + R"(
 
 #define EPSILON (0.0001f)
 #define NULL (0)
-#define THRESHOLD (0.001f)
 
 #define SPEED_OF_SOUND (340.0f)
 
@@ -34,17 +39,12 @@ typedef struct {
 } Intersection;
 
 typedef struct {
-    unsigned long surface;
-    float3 position;
-    float3 normal;
-    VolumeType volume;
-    float distance;
-} Reflection;
-
-typedef struct {
     VolumeType volume;
     float3 direction;
     float time;
+#ifdef DIAGNOSTIC
+    float3 position;
+#endif
 } Impulse;
 
 typedef struct {
@@ -295,15 +295,8 @@ kernel void raytrace
     //  These variables are for image_source approximation.
     TriangleVerts prev_primitives [NUM_IMAGE_SOURCE];
     float3 mic_reflection = position;
-    //  The image_source volume is started at a relatively much quieter volume
-    //  because otherwise it completely overpowers the diffuse trace.
-    float image_volume = 0.0000001;
 
-    for
-    (   unsigned long index = 0
-    ;   /*anyAbove (volume, THRESHOLD) && */index != outputOffset
-    ;   ++index
-    )
+    for (unsigned long index = 0; index != outputOffset; ++index)
     {
         //  Check for an intersection between the current ray and all the
         //  scene geometry.
@@ -321,9 +314,10 @@ kernel void raytrace
             break;
         }
 
+        global Triangle * triangle = closest.primitive;
         //  If we're fewer than NUM_IMAGE_SOURCE layers deep, the ray can be
         //  used to check for early reflections.
-        if (index < NUM_IMAGE_SOURCE)
+        if (index < NUM_IMAGE_SOURCE - 1)
         {
             //  Get the vertex data of the intersected triangle.
             TriangleVerts current =
@@ -346,7 +340,7 @@ kernel void raytrace
             //  Reflect the previous microphone image in the newest triangle.
             mic_reflection = mirror_point (mic_reflection, &current);
 
-            const float3 DIFF = source - mic_reflection;
+            const float3 DIFF = mic_reflection - source;
             const float DIST = length (DIFF);
             const float3 DIR = normalize (DIFF);
 
@@ -356,14 +350,15 @@ kernel void raytrace
             bool intersects = true;
             for (unsigned int k = 0; k != index && intersects; ++k)
             {
-                const float tvi = triangle_vert_intersection
-                (   prev_primitives [k].v0
-                ,   prev_primitives [k].v1
-                ,   prev_primitives [k].v2
-                ,   &toMic
-                );
-
-                if (tvi <= EPSILON)
+                if
+                (   triangle_vert_intersection
+                    (   prev_primitives [k].v0
+                    ,   prev_primitives [k].v1
+                    ,   prev_primitives [k].v2
+                    ,   &toMic
+                    )
+                <=  0
+                )
                 {
                     intersects = false;
                 }
@@ -373,35 +368,25 @@ kernel void raytrace
             //  source to microphone image is less than a certain value,
             //  the reflection pattern is valid for an early reflection
             //  contribution.
-            const float EARLY_REF_SECONDS = 30;
+            const float EARLY_REF_SECONDS = 10;
             if (intersects && DIST < SPEED_OF_SOUND * EARLY_REF_SECONDS)
             {
                 image_source [i * NUM_IMAGE_SOURCE + index] = (Impulse)
-                {   (VolumeType) image_volume
-                ,   DIR
+                {   volume * (VolumeType) 0.0000001
+                ,   -DIR
                 ,   SECONDS_PER_METER * DIST
+#ifdef DIAGNOSTIC
+                ,   mic_reflection
+#endif
                 };
             }
-
-            //  Flip the phase of the reflection contribution.
-            image_volume = -image_volume;
         }
 
         float3 intersection = ray.position + ray.direction * closest.distance;
         float newDist = distance + closest.distance;
-
-        global Triangle * triangle = closest.primitive;
         VolumeType newVol = -volume * surfaces [triangle->surface].specular;
 
-        Reflection reflection =
-        {   triangle->surface
-        ,   intersection
-        ,   triangle_normal (triangle, vertices)
-        ,   newVol
-        ,   newDist
-        };
-
-        const float3 vecToMic = position - reflection.position;
+        const float3 vecToMic = position - intersection;
         const float mag = length (vecToMic);
         const float3 direction = normalize (vecToMic);
         Ray toMic = {intersection, direction};
@@ -413,23 +398,24 @@ kernel void raytrace
         ,   vertices
         );
 
-        if (inter.primitive == NULL || inter.distance > mag)
-        {
-            const float DIST = reflection.distance + mag;
-            const float DIFF = dot (reflection.normal, -direction);
-            if (DIFF > 0)
-            {
-                impulses [i * outputOffset + index] = (Impulse)
-                {   (   volume
-                    *   attenuation_for_distance (DIST)
-                    *   surfaces [reflection.surface].diffuse
-                    *   DIFF
-                    )
-                ,   -direction
-                ,   SECONDS_PER_METER * DIST
-                };
-            }
-        }
+        const bool IS_INTERSECTION = inter.primitive == NULL || inter.distance > mag;
+        const float DIST = IS_INTERSECTION ? newDist + mag : 0;
+        const float DIFF = fabs (dot (triangle_normal (triangle, vertices), direction));
+        impulses [i * outputOffset + index] = (Impulse)
+        {   (   IS_INTERSECTION
+            ?   (   volume
+                *   attenuation_for_distance (DIST)
+                *   surfaces [triangle->surface].diffuse
+                *   DIFF
+                )
+            :   0
+            )
+        ,   -direction
+        ,   SECONDS_PER_METER * DIST
+#ifdef DIAGNOSTIC
+        ,   intersection
+#endif
+        };
 
         Ray newRay = triangle_reflectAt
         (   triangle
