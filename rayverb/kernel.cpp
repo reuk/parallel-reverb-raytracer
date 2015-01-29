@@ -1,12 +1,10 @@
 #include "rayverb.h"
 
-const std::string diagnostic
+const std::string Scene::KERNEL_STRING (
 #ifdef DIAGNOSTIC
-("#define DIAGNOSTIC")
+"#define DIAGNOSTIC"
 #endif
-;
-
-const std::string Scene::KERNEL_STRING (diagnostic + R"(
+R"(
 
 #define EPSILON (0.0001f)
 #define NULL (0)
