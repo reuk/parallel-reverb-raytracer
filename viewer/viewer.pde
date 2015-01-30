@@ -1,36 +1,46 @@
 import saito.objloader.*;
 import org.json.*;
 
-PImage logo;
-
 OBJModel model;
 
 class Intersection
 {
-  Intersection (PVector position, PVector volume)
+  Intersection (PVector position, float volume)
   {
     _position = position;
     _volume = volume;
   }
   
   public PVector _position;
-  public PVector _volume;
+  public float _volume;
 }
 
 ArrayList <ArrayList <Intersection>> trace = new ArrayList <ArrayList <Intersection>>();
 
+PVector source_pos;
+PVector mic_pos;
+
+void translate (PVector p) {translate (p.x, p.y, p.z);}
+
 void setup()
 {
-  size (500, 500, P3D);
+  size (1000, 1000, P3D);
   colorMode (RGB, 1);
   frameRate (25);
   
-  logo = loadImage("logo.png");
-
-  model = new OBJModel (this, "/Users/reuben/Desktop/basic.obj");
+  rotateZ(PI / 2);
+  
+  model = new OBJModel (this, "/Users/reuben/Desktop/room3.obj");
+  
+  JSONObject config_json = loadJSONObject ("../assets/config_hrtf.json");
+  JSONArray s_pos = config_json.getJSONArray ("source_position");
+  JSONArray m_pos = config_json.getJSONArray ("mic_position");
+  
+  source_pos = new PVector (s_pos.getFloat (0), s_pos.getFloat (1), s_pos.getFloat (2));
+  mic_pos = new PVector (m_pos.getFloat (0), m_pos.getFloat (1), m_pos.getFloat (2));
 
   //BufferedReader reader = createReader ("/Users/reuben/Desktop/py_test_p.json");
-  BufferedReader reader = createReader ("/Users/reuben/dev/parallel_raytrace/build/bin/out.dump");
+  BufferedReader reader = createReader ("/Users/reuben/dev/parallel_raytrace/out.dump");
 
   boolean read = true;
   while (read)
@@ -40,17 +50,12 @@ void setup()
       String line = reader.readLine();
       JSON json = JSON.parse (line);
       ArrayList <Intersection> list = new ArrayList <Intersection>();
-      list.add (new Intersection (new PVector (-5, 5, -5), new PVector (1, 1, 1)));
+      list.add (new Intersection (source_pos, 1));
       for (int i = 0; i != json.length(); ++i)
       {
         JSON vec = json.getJSON (i).getJSON ("position");
         PVector pvec = new PVector (vec.getFloat (0), vec.getFloat (1), vec.getFloat (2));
-        pvec.y = -pvec.y;
-
-        JSON vol = json.getJSON (i).getJSON ("volume");
-        PVector pvol = new PVector (abs (vol.getFloat (0)), abs (vol.getFloat (1)), abs (vol.getFloat (2)));
-
-        list.add (new Intersection (pvec, pvol));
+        list.add (new Intersection (pvec, json.getJSON (i).getFloat ("volume")));
       }
 
       trace.add (list);
@@ -83,28 +88,31 @@ void stroke (PVector c)
 void draw()
 {
   background (0.5);
-  translate (width / 2, height / 2);
+  translate (width / 2, height * 0.9);
   rotateY (frameCount * TWO_PI * 0.01);
-  scale (8);
+  scale (4);
   
   pushMatrix();
   fill (1, 0, 0);
   noStroke();
-  translate (-5, 5, -5);
+  translate (source_pos);
   sphere (1);
   popMatrix();
   
   pushMatrix();
   fill (0, 1, 1);
   noStroke();
-  translate (5, -5, 5);
+  translate (mic_pos);
   sphere (1);
   popMatrix();
 
   noFill();
   strokeWeight (0.1);
+  
+  PVector mini = new PVector();
+  PVector maxi = new PVector();
 
-  for (int i = 0; i != model.getSegmentCount (); ++i)
+  for (int i = 0; i != model.getSegmentCount(); ++i)
   {
     Face[] face = model.getSegment (i).getFaces();
 
@@ -117,40 +125,32 @@ void draw()
       beginShape();
 
       for (int k = 0; k != vertex.length; ++k)
-      {
-        vertex (vertex [k]);
+      {        
+        PVector temp = vertex [k].get();
+        temp = new PVector (temp.x, -temp.z, -temp.y);
+        
+        mini.set (min (mini.x, temp.x), min (mini.y, temp.y), min (mini.z, temp.z));
+        maxi.set (max (maxi.x, temp.x), max (maxi.y, temp.y), max (maxi.z, temp.z));
+        vertex (temp);
       }
 
       endShape (CLOSE);
-
-      PVector[] normal = face [j].getNormals();
-
-      beginShape (LINES);
-      for (int k = 0; k != vertex.length; ++k)
-      {
-        stroke (abs (normal [k].x), abs (normal [k].y), abs (normal [k].z));
-
-        vertex (vertex [k]);
-        vertex (PVector.add (vertex [k], PVector.mult (normal [k], 1)));
-      }
-      endShape();
     }
   }
+  
+  println (mouseX);
 
-  strokeWeight (0.1);
+  strokeWeight (0.3);
 
   ArrayList <Intersection> list = (ArrayList <Intersection>) trace.get (mouseX);
-
+  
   beginShape();
   for (int j = 0; j != list.size(); ++j)
   {
-    stroke (((Intersection) list.get (j))._volume);
+    stroke (abs(((Intersection) list.get (j))._volume * 100000), 0, 0);
     vertex (((Intersection) list.get (j))._position);
   }
   endShape();
-  
-  camera();
-  image(logo, width - logo.width, height - logo.height);
-  
+    
 //  saveFrame ("out-###.png");
 }

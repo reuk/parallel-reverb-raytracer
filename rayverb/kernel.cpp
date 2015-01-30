@@ -4,12 +4,12 @@ const std::string Scene::KERNEL_STRING (
 #ifdef DIAGNOSTIC
 "#define DIAGNOSTIC"
 #endif
+"#define NUM_IMAGE_SOURCE " + std::to_string (NUM_IMAGE_SOURCE) + "\n"
+"#define SPEED_OF_SOUND " + std::to_string (SPEED_OF_SOUND) + "\n"
 R"(
 
 #define EPSILON (0.0001f)
 #define NULL (0)
-
-#define SPEED_OF_SOUND (340.0f)
 
 constant float SECONDS_PER_METER = 1.0f / SPEED_OF_SOUND;
 typedef float8 VolumeType;
@@ -262,8 +262,6 @@ TriangleVerts mirror_verts (TriangleVerts * in, TriangleVerts * t)
     ,   mirror_point (in->v2, t)
     };
 }
-
-#define NUM_IMAGE_SOURCE 10
 
 kernel void raytrace
 (   global float3 * directions

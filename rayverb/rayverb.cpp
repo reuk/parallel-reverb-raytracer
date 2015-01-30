@@ -32,46 +32,6 @@ struct LatestImpulse: public binary_function <Impulse, Impulse, bool>
     }
 };
 
-template<>
-struct plus <cl_float3>
-:   public binary_function <cl_float3, cl_float3, cl_float3>
-{
-    inline cl_float3 operator() (const cl_float3 & a, const cl_float3 & b) const
-    {
-        return (cl_float3)
-        {   a.s [0] + b.s [0]
-        ,   a.s [1] + b.s [1]
-        ,   a.s [2] + b.s [2]
-        ,   a.s [3] + b.s [3]
-        };
-    }
-};
-
-template<>
-struct plus <cl_float8>
-:   public binary_function <cl_float8, cl_float8, cl_float8>
-{
-    inline cl_float8 operator() (const cl_float8 & a, const cl_float8 & b) const
-    {
-        return (cl_float8)
-        {   a.s [0] + b.s [0]
-        ,   a.s [1] + b.s [1]
-        ,   a.s [2] + b.s [2]
-        ,   a.s [3] + b.s [3]
-        ,   a.s [4] + b.s [4]
-        ,   a.s [5] + b.s [5]
-        ,   a.s [6] + b.s [6]
-        ,   a.s [7] + b.s [7]
-        };
-    }
-};
-
-template <typename T>
-inline T sum (const T & a, const T & b)
-{
-    return plus <T>() (a, b);
-}
-
 vector <VolumeType> flattenImpulses
 (   const vector <Impulse> & impulse
 ,   float samplerate
@@ -86,7 +46,7 @@ vector <VolumeType> flattenImpulses
 
     vector <VolumeType> flattened (MAX_SAMPLE, (VolumeType) {0});
 
-    for (const auto & i : impulse)
+    for (auto && i : impulse)
     {
         const unsigned long SAMPLE = round (i.time * samplerate);
         flattened [SAMPLE] = sum (flattened [SAMPLE], i.volume);
@@ -181,7 +141,7 @@ Scene::Scene
 ,   cl_image_source
     (   cl_context
     ,   CL_MEM_READ_WRITE
-    ,   directions.size() * IMAGE_SOURCE_REFLECTIONS * sizeof (Impulse)
+    ,   directions.size() * NUM_IMAGE_SOURCE * sizeof (Impulse)
     )
 {
     cl_program = cl::Program (cl_context, KERNEL_STRING, false);
@@ -409,7 +369,7 @@ public:
         cl_float3 mini, maxi;
         mini = maxi = vertices.front();
 
-        for (const auto & i : vertices)
+        for (auto && i : vertices)
         {
             for (int j = 0; j != 3; ++j)
             {
@@ -588,11 +548,11 @@ vector <Impulse> Scene::attenuate (const Speaker & speaker)
     (   cl::EnqueueArgs (queue, cl::NDRange (nrays))
     ,   cl_image_source
     ,   cl_attenuated
-    ,   IMAGE_SOURCE_REFLECTIONS
+    ,   NUM_IMAGE_SOURCE
     ,   speaker
     );
 
-    vector <Impulse> a1 (IMAGE_SOURCE_REFLECTIONS * nrays);
+    vector <Impulse> a1 (NUM_IMAGE_SOURCE * nrays);
     cl::copy (queue, cl_attenuated, begin (a1), end (a1));
 
     a0.insert(a0.end(), a1.begin(), a1.end());
@@ -613,7 +573,7 @@ vector <Impulse> Scene::getRawDiffuse()
 
 vector <Impulse> Scene::getRawImages()
 {
-    vector <Impulse> raw (IMAGE_SOURCE_REFLECTIONS * nrays);
+    vector <Impulse> raw (NUM_IMAGE_SOURCE * nrays);
     cl::copy
     (   queue
     ,   cl_image_source
@@ -705,13 +665,13 @@ vector <Impulse> Scene::hrtf
     (   cl::EnqueueArgs (queue, cl::NDRange (nrays))
     ,   cl_image_source
     ,   cl_attenuated
-    ,   IMAGE_SOURCE_REFLECTIONS
+    ,   NUM_IMAGE_SOURCE
     ,   cl_hrtf
     ,   facing
     ,   up
     );
 
-    vector <Impulse> a1 (IMAGE_SOURCE_REFLECTIONS * nrays);
+    vector <Impulse> a1 (NUM_IMAGE_SOURCE * nrays);
     cl::copy (queue, cl_attenuated, begin (a1), end (a1));
 
     a0.insert(a0.end(), a1.begin(), a1.end());

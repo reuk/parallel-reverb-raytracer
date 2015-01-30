@@ -14,6 +14,8 @@
 #include <array>
 
 //#define DIAGNOSTIC
+#define NUM_IMAGE_SOURCE 10
+#define SPEED_OF_SOUND (340.0f)
 
 //  These definitions MUST be kept up-to-date with the defs in the cl file.
 //  It might make sense to nest them inside the Scene because I don't think
@@ -115,6 +117,91 @@ inline void normalize (std::vector <T> & ret)
     div (ret, max_amp (ret));
 }
 
+template<>
+struct std::plus <cl_float3>
+:   public binary_function <cl_float3, cl_float3, cl_float3>
+{
+    inline cl_float3 operator() (const cl_float3 & a, const cl_float3 & b) const
+    {
+        return (cl_float3)
+        {   a.s [0] + b.s [0]
+        ,   a.s [1] + b.s [1]
+        ,   a.s [2] + b.s [2]
+        ,   a.s [3] + b.s [3]
+        };
+    }
+};
+
+template<>
+struct std::plus <cl_float8>
+:   public binary_function <cl_float8, cl_float8, cl_float8>
+{
+    inline cl_float8 operator() (const cl_float8 & a, const cl_float8 & b) const
+    {
+        return (cl_float8)
+        {   a.s [0] + b.s [0]
+        ,   a.s [1] + b.s [1]
+        ,   a.s [2] + b.s [2]
+        ,   a.s [3] + b.s [3]
+        ,   a.s [4] + b.s [4]
+        ,   a.s [5] + b.s [5]
+        ,   a.s [6] + b.s [6]
+        ,   a.s [7] + b.s [7]
+        };
+    }
+};
+
+template<>
+struct std::negate <cl_float3>
+:   public unary_function <cl_float3, cl_float3>
+{
+    inline cl_float3 operator() (const cl_float3 & a) const
+    {
+        return (cl_float3) {-a.s [0], -a.s [1], -a.s [2], -a.s [3]};
+    }
+};
+
+template <typename T>
+inline T sum (const T & a, const T & b)
+{
+    return std::plus <T>() (a, b);
+}
+
+template <typename T>
+inline T doNegate (const T & a)
+{
+    return std::negate <T>() (a);
+}
+
+template <typename T>
+inline void fixPredelay (T & ret, float predelay_seconds)
+{
+    for (auto & i : ret)
+        fixPredelay (i, predelay_seconds);
+}
+
+template<>
+inline void fixPredelay (Impulse & ret, float predelay_seconds)
+{
+    ret.time = ret.time > predelay_seconds ? ret.time - predelay_seconds : 0;
+}
+
+template <typename T>
+inline void fixPredelay
+(   T & ret
+,   const cl_float3 & micpos
+,   const cl_float3 & source
+)
+{
+    const cl_float3 diff = sum (micpos, doNegate (source));
+    const float length = sqrt
+    (   pow (diff.s [0], 2)
+    +   pow (diff.s [1], 2)
+    +   pow (diff.s [2], 2)
+    );
+    fixPredelay (ret, length / SPEED_OF_SOUND);
+}
+
 
 //  Scene is imagined to be an 'initialize-once, use-many' kind of class.
 //  It's initialized with a certain set of geometry, and then it keeps that
@@ -204,8 +291,6 @@ private:
 
     static const std::string KERNEL_STRING;
     static const std::array <std::array <std::array <cl_float8, 180>, 360>, 2> HRTF_DATA;
-
-    static const cl_ulong IMAGE_SOURCE_REFLECTIONS = 10;
 
     cl::Buffer cl_image_source;
 };
