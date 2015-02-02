@@ -14,6 +14,12 @@ You need the following libraries installed in a standard location (probably /usr
 * Assimp
 * Libsndfile
 
+If you're on a Mac with homebrew you can grab these dependencies with
+
+```
+brew install fftw assimp libsndfile
+```
+
 Once these libraries all have CMake builds of their own I'll add git submodules for them.
 
 On Mac OS X the OpenCL framework is used. Obviously this isn't something that Linuxes have, so at some point I'll try making the build a bit more platform agnostic, to see if it will run on Linux as well.
