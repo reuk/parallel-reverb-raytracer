@@ -68,3 +68,8 @@ to do
 
 * generate a whole bunch of sample reverbs
     * build a max patch for auditioning them
+
+* hrtf delay based on angle / distance
+
+* reimplement raytracer so that it folds results in small groups to avoid
+  completely filling video memory and then halting video processing

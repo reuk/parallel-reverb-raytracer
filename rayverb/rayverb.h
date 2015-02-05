@@ -25,6 +25,8 @@
 
 typedef cl_float8 VolumeType;
 
+/// A Triangle contains an offset into an array of Surface, and three offsets
+/// into an array of cl_float3.
 typedef struct  {
     cl_ulong surface;
     cl_ulong v0;
@@ -59,6 +61,9 @@ typedef struct  {
 
 typedef _Speaker_unalign __attribute__ ((aligned(8))) Speaker;
 
+/// Sum impulses ocurring at the same (sampled) time and return a vector in
+/// which each subsequent item refers to the next sample of an impulse
+/// response.
 std::vector <VolumeType> flattenImpulses
 (   const std::vector <Impulse> & impulse
 ,   float samplerate

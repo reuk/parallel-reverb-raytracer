@@ -88,13 +88,12 @@ void forward_fft
     const unsigned long CPLX_LENGTH = FFT_LENGTH / 2 + 1;
 
     memset (i, 0, sizeof (float) * FFT_LENGTH);
-    //memset (o, 0, sizeof (fftwf_complex) * CPLX_LENGTH);
     memcpy (i, data.data(), sizeof (float) * data.size());
     fftwf_execute (plan);
     memcpy (results, o, sizeof (fftwf_complex) * CPLX_LENGTH);
 }
 
-vector <float> RayverbFiltering::fastConvolve
+vector <float> RayverbFiltering::BandpassWindowedSinc::fastConvolve
 (   const vector <float> & a
 ,   const vector <float> & b
 )
@@ -159,7 +158,7 @@ vector <float> RayverbFiltering::fastConvolve
     return ret;
 }
 
-vector <float> RayverbFiltering::bandpassKernel
+vector <float> RayverbFiltering::BandpassWindowedSinc::bandpassKernel
 (   float sr
 ,   float lo
 ,   float hi
@@ -171,7 +170,7 @@ vector <float> RayverbFiltering::bandpassKernel
     return fastConvolve (lop, hip);
 }
 
-vector <float> RayverbFiltering::biquad
+vector <float> RayverbFiltering::BandpassBiquadOnepass::biquad
 (   const vector <float> & input
 ,   double b0
 ,   double b1
@@ -194,12 +193,9 @@ vector <float> RayverbFiltering::biquad
     );
 }
 
-vector <float> RayverbFiltering::bandpassBiquad
+vector <float> RayverbFiltering::BandpassBiquadOnepass::filter
 (   const vector <float> & data
-,   float lo
-,   float hi
-,   float sr
-)
+) const
 {
     const double c = sqrt (lo * hi);
     const double omega = 2 * M_PI * c / sr;
@@ -233,4 +229,16 @@ vector <float> RayverbFiltering::bandpassBiquad
     ,   a1
     ,   a2
     );
+}
+
+vector <float> RayverbFiltering::BandpassBiquadTwopass::filter
+(   const std::vector <float> & data
+) const
+{
+    BandpassBiquadOnepass b (lo, hi, sr);
+    vector <float> p1 = b.filter (data);
+    reverse (std::begin (p1), std::end (p1));
+    vector <float> p2 = b.filter (p1);
+    reverse (std::begin (p2), std::end (p2));
+    return p2;
 }

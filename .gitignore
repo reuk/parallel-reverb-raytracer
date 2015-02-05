@@ -11,3 +11,5 @@ gtest-1.7.0
 rapidjson-master
 revtest.logicx
 extras
+docs
+hrtf_analysis/responses
