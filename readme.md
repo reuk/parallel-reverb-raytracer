@@ -78,3 +78,5 @@ to do
 
 * reimplement raytracer so that it folds results in small groups to avoid
   completely filling video memory and then halting video processing
+
+* image-source fix - keep track of different paths

@@ -14,6 +14,7 @@
 #include <array>
 
 //#define DIAGNOSTIC
+
 #define NUM_IMAGE_SOURCE 10
 #define SPEED_OF_SOUND (340.0f)
 
@@ -23,6 +24,8 @@
 //
 //  Unless I have a new class/kernel for constructing BVHs?
 
+/// Type used for storing multiband volumes.
+/// Higher values of 'x' in cl_floatx = higher numbers of parallel bands.
 typedef cl_float8 VolumeType;
 
 /// A Triangle contains an offset into an array of Surface, and three offsets
@@ -36,6 +39,7 @@ typedef struct  {
 
 typedef _Triangle_unalign __attribute__ ((aligned(8))) Triangle;
 
+/// Surfaces describe their specular and diffuse coefficients per-band.
 typedef struct  {
     VolumeType specular;
     VolumeType diffuse;
@@ -43,6 +47,8 @@ typedef struct  {
 
 typedef _Surface_unalign __attribute__ ((aligned(8))) Surface;
 
+/// An impulse contains a volume, a time in seconds, and the direction from
+/// which it came (useful for attenuation/hrtf stuff).
 typedef struct  {
     VolumeType volume;
     cl_float3 direction;
@@ -54,6 +60,8 @@ typedef struct  {
 
 typedef _Impulse_unalign __attribute__ ((aligned(8))) Impulse;
 
+/// Each speaker has a (normalized-unit) direction, and a coefficient in the
+/// range 0-1 which describes its polar pattern from omni to bidirectional.
 typedef struct  {
     cl_float3 direction;
     cl_float coefficient;
@@ -69,17 +77,25 @@ std::vector <VolumeType> flattenImpulses
 ,   float samplerate
 );
 
+/// Maps flattenImpulses over a vector of input vectors.
 std::vector <std::vector <VolumeType>> flattenImpulses
 (   const std::vector <std::vector <Impulse>> & impulse
 ,   float samplerate
 );
 
+/// Filter each channel of the input data, then normalize all channels.
 std::vector <std::vector <float>> process
 (   RayverbFiltering::FilterType filtertype
 ,   std::vector <std::vector <VolumeType>> & data
 ,   float samplerate
 );
 
+//  These next few functions are recursive template metaprogramming magic
+//  and I've forgotten how they work since I wrote them but it's REALLY CLEVER
+//  I promise.
+
+/// You can call max_amp on an arbitrarily nested vector and get back the
+/// magnitude of the value with the greatest magnitude in the vector.
 template <typename T>
 inline float max_amp (const std::vector <T> & ret);
 
@@ -103,6 +119,7 @@ inline float max_amp (const std::vector <T> & ret)
     return std::accumulate (begin (ret), end (ret), 0.0f, FabsMax <T>());
 }
 
+/// Recursively divide by reference.
 template <typename T>
 inline void div (T & ret, float f)
 {
@@ -116,12 +133,15 @@ inline void div (float & ret, float f)
     ret /= f;
 }
 
+/// Find the largest absolute value in an arbitarily nested vector, then
+/// divide every item in the vector by that value.
 template <typename T>
 inline void normalize (std::vector <T> & ret)
 {
     div (ret, max_amp (ret));
 }
 
+/// Overloads std::plus for cl_float3.
 template<>
 struct std::plus <cl_float3>
 :   public binary_function <cl_float3, cl_float3, cl_float3>
@@ -137,6 +157,7 @@ struct std::plus <cl_float3>
     }
 };
 
+/// Overloads std::plus for cl_float8.
 template<>
 struct std::plus <cl_float8>
 :   public binary_function <cl_float8, cl_float8, cl_float8>
@@ -156,6 +177,7 @@ struct std::plus <cl_float8>
     }
 };
 
+/// Overloads std::negate for cl_float3.
 template<>
 struct std::negate <cl_float3>
 :   public unary_function <cl_float3, cl_float3>
@@ -166,18 +188,21 @@ struct std::negate <cl_float3>
     }
 };
 
+/// Basically std::plus but without having to manually specify type info.
 template <typename T>
 inline T sum (const T & a, const T & b)
 {
     return std::plus <T>() (a, b);
 }
 
+/// Basically std::negate but without having to manually specify type info.
 template <typename T>
 inline T doNegate (const T & a)
 {
     return std::negate <T>() (a);
 }
 
+/// Subtract a time in seconds from a nested vector of impulses.
 template <typename T>
 inline void fixPredelay (T & ret, float predelay_seconds)
 {
@@ -185,12 +210,15 @@ inline void fixPredelay (T & ret, float predelay_seconds)
         fixPredelay (i, predelay_seconds);
 }
 
+/// Subtract a time in seconds from the 'time' field of an impulse.
 template<>
 inline void fixPredelay (Impulse & ret, float predelay_seconds)
 {
     ret.time = ret.time > predelay_seconds ? ret.time - predelay_seconds : 0;
 }
 
+/// Calculate the time taken for sound to travel between a source and mic,
+/// then subtract that time from all impulses.
 template <typename T>
 inline void fixPredelay
 (   T & ret
@@ -207,19 +235,22 @@ inline void fixPredelay
     fixPredelay (ret, length / SPEED_OF_SOUND);
 }
 
-
-//  Scene is imagined to be an 'initialize-once, use-many' kind of class.
-//  It's initialized with a certain set of geometry, and then it keeps that
-//  geometry throughout its lifespan.
-//
-//  If I were to allow the geometry to be updated, there's a chance the buffers
-//  would be reinitialized WHILE a kernel was running, and I'm not sure what
-//  would happen in that case (though I'm sure it would be bad). Unlike copies,
-//  reinitializing the buffer on the host is not queued.
-
+/// This is where the magic happens.
+/// Scene is imagined to be an 'initialize-once, use-many' kind of class.
+/// It's initialized with a certain set of geometry, and then it keeps that
+/// geometry throughout its lifespan.
+///
+/// If I were to allow the geometry to be updated, there's a chance the buffers
+/// would be reinitialized WHILE a kernel was running, and I'm not sure what
+/// would happen in that case (though I'm sure it would be bad). Unlike copies,
+/// reinitializing the buffer on the host is not queued.
 class Scene
 {
 public:
+    /// Set up a scene with an openCL context and a bunch of geometry.
+    /// This reserves a whole bunch of space on the GPU.
+    /// Probably don't have more than one instance of this class alive at a
+    /// time.
     Scene
     (   cl::Context & cl_context
     ,   unsigned long nreflections
@@ -230,6 +261,7 @@ public:
     ,   bool verbose = false
     );
 
+    /// Init from a 3D model file.
     Scene
     (   cl::Context & cl_context
     ,   unsigned long nreflections
@@ -239,30 +271,41 @@ public:
     ,   bool verbose = false
     );
 
+    /// Do a raytrace.
+    /// Results are stored internally.
+    /// To get stuff out, call attenuate or hrtf.
     void trace
     (   const cl_float3 & micpos
     ,   const cl_float3 & source
     );
 
-    std::vector <Impulse> attenuate (const Speaker & speaker);
+    /// Get raw, unprocessed diffuse impulses from raytrace.
     std::vector <Impulse> getRawDiffuse();
+
+    /// Get raw, unprocessed image-source impulses from raytrace.
     std::vector <Impulse> getRawImages();
 
+    /// Get attenuated impulses for a particular speaker.
+    std::vector <Impulse> attenuate (const Speaker & speaker);
+
+    /// Get attenuated impulses for a vector of speakers.
     std::vector <std::vector <Impulse>>  attenuate
     (   const std::vector <Speaker> & speakers
     );
 
-    std::vector <Impulse> hrtf
-    (   unsigned long channel
-    ,   const cl_float3 & facing
-    ,   const cl_float3 & up
-    );
+    /// Get attenuated impulses for two channels of hrtf.
     std::vector <std::vector <Impulse>> hrtf
     (   const cl_float3 & facing
     ,   const cl_float3 & up
     );
 
 private:
+    std::vector <Impulse> hrtf
+    (   unsigned long channel
+    ,   const cl_float3 & facing
+    ,   const cl_float3 & up
+    );
+
     const unsigned long nrays;
     const unsigned long nreflections;
     const unsigned long ntriangles;
@@ -300,6 +343,7 @@ private:
     cl::Buffer cl_image_source;
 };
 
+/// Try to open and parse a json file.
 void attemptJsonParse
 (   const std::string & fname
 ,   rapidjson::Document & doc
