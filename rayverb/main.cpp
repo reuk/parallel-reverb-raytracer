@@ -323,12 +323,11 @@ int main(int argc, const char * argv[])
         Scene scene
         (   context
         ,   numImpulses
-        ,   directions
         ,   model_filename
         ,   material_filename
         );
 
-        scene.trace (mic, source);
+        scene.trace (mic, source, directions);
 
         switch (mode)
         {
@@ -370,7 +369,7 @@ int main(int argc, const char * argv[])
 
 #ifdef DIAGNOSTIC
     //print_diagnostic (numRays, numImpulses, raw);
-    print_diagnostic (numRays, 10, raw);
+    print_diagnostic (numRays, NUM_IMAGE_SOURCE, raw);
 #endif
 
     return 0;

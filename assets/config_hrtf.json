@@ -1,7 +1,7 @@
 {
     "source_position": [0, -50, 20],
     "mic_position": [-5, -55, 25],
-    "rays": 8192,
+    "rays": 32768,
     "reflections": 128,
     "sample_rate": 44100,
     "bit_depth": 16,

@@ -114,34 +114,37 @@ vector <vector <float>> process
 Scene::Scene
 (   cl::Context & cl_context
 ,   unsigned long nreflections
-,   vector <cl_float3> & directions
 ,   vector <Triangle> & triangles
 ,   vector <cl_float3> & vertices
 ,   vector <Surface> & surfaces
 ,   bool verbose
 )
-:   nrays (directions.size())
+:   ngroups (0)
 ,   nreflections (nreflections)
 ,   ntriangles (triangles.size())
 ,   cl_context (cl_context)
-,   cl_directions (cl_context, begin (directions), end (directions), false)
+,   cl_directions
+    (   cl_context
+    ,   CL_MEM_READ_WRITE
+    ,   RAY_GROUP_SIZE * sizeof (cl_float3)
+    )
 ,   cl_triangles  (cl_context, begin (triangles),  end (triangles),  false)
 ,   cl_vertices   (cl_context, begin (vertices),   end (vertices),   false)
 ,   cl_surfaces   (cl_context, begin (surfaces),   end (surfaces),   false)
 ,   cl_impulses
     (   cl_context
     ,   CL_MEM_READ_WRITE
-    ,   directions.size() * nreflections * sizeof (Impulse)
+    ,   RAY_GROUP_SIZE * nreflections * sizeof (Impulse)
     )
 ,   cl_attenuated
     (   cl_context
     ,   CL_MEM_READ_WRITE
-    ,   directions.size() * nreflections * sizeof (Impulse)
+    ,   RAY_GROUP_SIZE * nreflections * sizeof (Impulse)
     )
 ,   cl_image_source
     (   cl_context
     ,   CL_MEM_READ_WRITE
-    ,   directions.size() * NUM_IMAGE_SOURCE * sizeof (Impulse)
+    ,   RAY_GROUP_SIZE * NUM_IMAGE_SOURCE * sizeof (Impulse)
     )
 {
     cl_program = cl::Program (cl_context, KERNEL_STRING, false);
@@ -462,14 +465,12 @@ public:
 Scene::Scene
 (   cl::Context & cl_context
 ,   unsigned long nreflections
-,   std::vector <cl_float3> & directions
 ,   SceneData sceneData
 ,   bool verbose
 )
 :   Scene
 (   cl_context
 ,   nreflections
-,   directions
 ,   sceneData.triangles
 ,   sceneData.vertices
 ,   sceneData.surfaces
@@ -480,7 +481,6 @@ Scene::Scene
 Scene::Scene
 (   cl::Context & cl_context
 ,   unsigned long nreflections
-,   std::vector <cl_float3> & directions
 ,   const string & objpath
 ,   const string & materialFileName
 ,   bool verbose
@@ -488,13 +488,16 @@ Scene::Scene
 :   Scene
 (   cl_context
 ,   nreflections
-,   directions
 ,   SceneData (objpath, materialFileName)
 )
 {
 }
 
-void Scene::trace (const cl_float3 & micpos, const cl_float3 & source)
+void Scene::trace
+(   const cl_float3 & micpos
+,   const cl_float3 & source
+,   const vector <cl_float3> & directions
+)
 {
     auto raytrace = cl::make_kernel
     <   cl::Buffer
@@ -509,19 +512,53 @@ void Scene::trace (const cl_float3 & micpos, const cl_float3 & source)
     ,   cl_ulong
     > (cl_program, "raytrace");
 
-    raytrace
-    (   cl::EnqueueArgs (queue, cl::NDRange (nrays))
-    ,   cl_directions
-    ,   micpos
-    ,   cl_triangles
-    ,   ntriangles
-    ,   cl_vertices
-    ,   source
-    ,   cl_surfaces
-    ,   cl_impulses
-    ,   cl_image_source
-    ,   nreflections
-    );
+    ngroups = directions.size() / RAY_GROUP_SIZE;
+
+    storedDiffuse.resize (ngroups * RAY_GROUP_SIZE * nreflections);
+    storedImage.resize (ngroups * RAY_GROUP_SIZE * NUM_IMAGE_SOURCE);
+
+    for (int i = 0; i != ngroups; ++i)
+    {
+        cl::copy
+        (   queue
+        ,   directions.begin() + (i + 0) * RAY_GROUP_SIZE
+        ,   directions.begin() + (i + 1) * RAY_GROUP_SIZE
+        ,   cl_directions
+        );
+
+        vector <Impulse> diffuse (RAY_GROUP_SIZE * nreflections, (Impulse) {0});
+        cl::copy (queue, begin (diffuse), end (diffuse), cl_impulses);
+
+        vector <Impulse> image (RAY_GROUP_SIZE * NUM_IMAGE_SOURCE, (Impulse) {0});
+        cl::copy (queue, begin (image), end (image), cl_image_source);
+
+        raytrace
+        (   cl::EnqueueArgs (queue, cl::NDRange (RAY_GROUP_SIZE))
+        ,   cl_directions
+        ,   micpos
+        ,   cl_triangles
+        ,   ntriangles
+        ,   cl_vertices
+        ,   source
+        ,   cl_surfaces
+        ,   cl_impulses
+        ,   cl_image_source
+        ,   nreflections
+        );
+
+        cl::copy
+        (   queue
+        ,   cl_impulses
+        ,   storedDiffuse.begin() + (i + 0) * RAY_GROUP_SIZE * nreflections
+        ,   storedDiffuse.begin() + (i + 1) * RAY_GROUP_SIZE * nreflections
+        );
+        cl::copy
+        (   queue
+        ,   cl_image_source
+        ,   storedImage.begin() + (i + 0) * RAY_GROUP_SIZE * NUM_IMAGE_SOURCE
+        ,   storedImage.begin() + (i + 1) * RAY_GROUP_SIZE * NUM_IMAGE_SOURCE
+        );
+    }
 }
 
 vector <Impulse> Scene::attenuate (const Speaker & speaker)
@@ -533,54 +570,65 @@ vector <Impulse> Scene::attenuate (const Speaker & speaker)
     ,   Speaker
     > (cl_program, "attenuate");
 
-    attenuate
-    (   cl::EnqueueArgs (queue, cl::NDRange (nrays))
-    ,   cl_impulses
-    ,   cl_attenuated
-    ,   nreflections
-    ,   speaker
-    );
+    vector <Impulse> retDiffuse (ngroups * RAY_GROUP_SIZE * nreflections);
+    vector <Impulse> retImage (ngroups * RAY_GROUP_SIZE * NUM_IMAGE_SOURCE);
 
-    vector <Impulse> a0 (nreflections * nrays);
-    cl::copy (queue, cl_attenuated, begin (a0), end (a0));
+    for (int i = 0; i != ngroups; ++i)
+    {
+        cl::copy
+        (   queue
+        ,   storedDiffuse.begin() + (i + 0) * RAY_GROUP_SIZE * nreflections
+        ,   storedDiffuse.begin() + (i + 1) * RAY_GROUP_SIZE * nreflections
+        ,   cl_impulses
+        );
+        cl::copy
+        (   queue
+        ,   storedImage.begin() + (i + 0) * RAY_GROUP_SIZE * NUM_IMAGE_SOURCE
+        ,   storedImage.begin() + (i + 1) * RAY_GROUP_SIZE * NUM_IMAGE_SOURCE
+        ,   cl_image_source
+        );
 
-    attenuate
-    (   cl::EnqueueArgs (queue, cl::NDRange (nrays))
-    ,   cl_image_source
-    ,   cl_attenuated
-    ,   NUM_IMAGE_SOURCE
-    ,   speaker
-    );
+        attenuate
+        (   cl::EnqueueArgs (queue, cl::NDRange (RAY_GROUP_SIZE))
+        ,   cl_impulses
+        ,   cl_attenuated
+        ,   nreflections
+        ,   speaker
+        );
+        cl::copy
+        (   queue
+        ,   cl_attenuated
+        ,   retDiffuse.begin() + (i + 0) * RAY_GROUP_SIZE * nreflections
+        ,   retDiffuse.begin() + (i + 1) * RAY_GROUP_SIZE * nreflections
+        );
 
-    vector <Impulse> a1 (NUM_IMAGE_SOURCE * nrays);
-    cl::copy (queue, cl_attenuated, begin (a1), end (a1));
+        attenuate
+        (   cl::EnqueueArgs (queue, cl::NDRange (RAY_GROUP_SIZE))
+        ,   cl_image_source
+        ,   cl_attenuated
+        ,   NUM_IMAGE_SOURCE
+        ,   speaker
+        );
+        cl::copy
+        (   queue
+        ,   cl_attenuated
+        ,   retImage.begin() + (i + 0) * RAY_GROUP_SIZE * NUM_IMAGE_SOURCE
+        ,   retImage.begin() + (i + 1) * RAY_GROUP_SIZE * NUM_IMAGE_SOURCE
+        );
+    }
 
-    a0.insert(a0.end(), a1.begin(), a1.end());
-    return a0;
+    retDiffuse.insert (retDiffuse.end(), retImage.begin(), retImage.end());
+    return retDiffuse;
 }
 
 vector <Impulse> Scene::getRawDiffuse()
 {
-    vector <Impulse> raw (nreflections * nrays);
-    cl::copy
-    (   queue
-    ,   cl_impulses
-    ,   begin (raw)
-    ,   end (raw)
-    );
-    return raw;
+    return storedDiffuse;
 }
 
 vector <Impulse> Scene::getRawImages()
 {
-    vector <Impulse> raw (NUM_IMAGE_SOURCE * nrays);
-    cl::copy
-    (   queue
-    ,   cl_image_source
-    ,   begin (raw)
-    ,   end (raw)
-    );
-    return raw;
+    return storedImage;
 }
 
 vector <vector <Impulse>> Scene::attenuate (const vector <Speaker> & speakers)
@@ -648,32 +696,57 @@ vector <Impulse> Scene::hrtf
     ,   cl_float3
     > (cl_program, "hrtf");
 
-    hrtf
-    (   cl::EnqueueArgs (queue, cl::NDRange (nrays))
-    ,   cl_impulses
-    ,   cl_attenuated
-    ,   nreflections
-    ,   cl_hrtf
-    ,   facing
-    ,   up
-    );
+    vector <Impulse> retDiffuse (ngroups * RAY_GROUP_SIZE * nreflections);
+    vector <Impulse> retImage (ngroups * RAY_GROUP_SIZE * NUM_IMAGE_SOURCE);
 
-    vector <Impulse> a0 (nreflections * nrays);
-    cl::copy (queue, cl_attenuated, begin (a0), end (a0));
+    for (int i = 0; i != ngroups; ++i)
+    {
+        cl::copy
+        (   queue
+        ,   storedDiffuse.begin() + (i + 0) * RAY_GROUP_SIZE * nreflections
+        ,   storedDiffuse.begin() + (i + 1) * RAY_GROUP_SIZE * nreflections
+        ,   cl_impulses
+        );
+        cl::copy
+        (   queue
+        ,   storedImage.begin() + (i + 0) * RAY_GROUP_SIZE * NUM_IMAGE_SOURCE
+        ,   storedImage.begin() + (i + 1) * RAY_GROUP_SIZE * NUM_IMAGE_SOURCE
+        ,   cl_image_source
+        );
 
-    hrtf
-    (   cl::EnqueueArgs (queue, cl::NDRange (nrays))
-    ,   cl_image_source
-    ,   cl_attenuated
-    ,   NUM_IMAGE_SOURCE
-    ,   cl_hrtf
-    ,   facing
-    ,   up
-    );
+        hrtf
+        (   cl::EnqueueArgs (queue, cl::NDRange (RAY_GROUP_SIZE))
+        ,   cl_impulses
+        ,   cl_attenuated
+        ,   nreflections
+        ,   cl_hrtf
+        ,   facing
+        ,   up
+        );
+        cl::copy
+        (   queue
+        ,   cl_attenuated
+        ,   retDiffuse.begin() + (i + 0) * RAY_GROUP_SIZE * nreflections
+        ,   retDiffuse.begin() + (i + 1) * RAY_GROUP_SIZE * nreflections
+        );
 
-    vector <Impulse> a1 (NUM_IMAGE_SOURCE * nrays);
-    cl::copy (queue, cl_attenuated, begin (a1), end (a1));
+        hrtf
+        (   cl::EnqueueArgs (queue, cl::NDRange (RAY_GROUP_SIZE))
+        ,   cl_image_source
+        ,   cl_attenuated
+        ,   NUM_IMAGE_SOURCE
+        ,   cl_hrtf
+        ,   facing
+        ,   up
+        );
+        cl::copy
+        (   queue
+        ,   cl_attenuated
+        ,   retImage.begin() + (i + 0) * RAY_GROUP_SIZE * NUM_IMAGE_SOURCE
+        ,   retImage.begin() + (i + 1) * RAY_GROUP_SIZE * NUM_IMAGE_SOURCE
+        );
+    }
 
-    a0.insert(a0.end(), a1.begin(), a1.end());
-    return a0;
+    retDiffuse.insert (retDiffuse.end(), retImage.begin(), retImage.end());
+    return retDiffuse;
 }

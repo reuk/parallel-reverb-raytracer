@@ -254,7 +254,6 @@ public:
     Scene
     (   cl::Context & cl_context
     ,   unsigned long nreflections
-    ,   std::vector <cl_float3> & directions
     ,   std::vector <Triangle> & triangles
     ,   std::vector <cl_float3> & vertices
     ,   std::vector <Surface> & surfaces
@@ -265,7 +264,6 @@ public:
     Scene
     (   cl::Context & cl_context
     ,   unsigned long nreflections
-    ,   std::vector <cl_float3> & directions
     ,   const std::string & objpath
     ,   const std::string & materialFileName
     ,   bool verbose = false
@@ -277,6 +275,7 @@ public:
     void trace
     (   const cl_float3 & micpos
     ,   const cl_float3 & source
+    ,   const std::vector <cl_float3> & directions
     );
 
     /// Get raw, unprocessed diffuse impulses from raytrace.
@@ -306,7 +305,7 @@ private:
     ,   const cl_float3 & up
     );
 
-    const unsigned long nrays;
+    unsigned long ngroups;
     const unsigned long nreflections;
     const unsigned long ntriangles;
 
@@ -332,15 +331,18 @@ private:
     Scene
     (   cl::Context & cl_context
     ,   unsigned long nreflections
-    ,   std::vector <cl_float3> & directions
     ,   SceneData sceneData
     ,   bool verbose = false
     );
 
+    static const int RAY_GROUP_SIZE = 1024;
     static const std::string KERNEL_STRING;
     static const std::array <std::array <std::array <cl_float8, 180>, 360>, 2> HRTF_DATA;
 
     cl::Buffer cl_image_source;
+
+    std::vector <Impulse> storedDiffuse;
+    std::vector <Impulse> storedImage;
 };
 
 /// Try to open and parse a json file.
