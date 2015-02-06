@@ -38,12 +38,14 @@ typedef struct {
 
 typedef struct {
     VolumeType volume;
-    float3 direction;
-    float time;
-#ifdef DIAGNOSTIC
     float3 position;
-#endif
+    float time;
 } Impulse;
+
+typedef struct {
+    Impulse impulse [NUM_IMAGE_SOURCE];
+    unsigned long indices [NUM_IMAGE_SOURCE];
+} ImageSource;
 
 typedef struct {
     float3 direction;
@@ -292,6 +294,14 @@ kernel void raytrace
     TriangleVerts prev_primitives [NUM_IMAGE_SOURCE];
     float3 mic_reflection = position;
 
+    const float3 INIT_DIFF = mic_reflection - source;
+    const float INIT_DIST = length (INIT_DIFF);
+    image_source [i * NUM_IMAGE_SOURCE] = (Impulse)
+    {   volume * attenuation_for_distance (INIT_DIST)
+    ,   mic_reflection
+    ,   SECONDS_PER_METER * INIT_DIST
+    };
+
     for (unsigned long index = 0; index != outputOffset; ++index)
     {
         //  Check for an intersection between the current ray and all the
@@ -367,13 +377,10 @@ kernel void raytrace
             const float EARLY_REF_SECONDS = 10;
             if (intersects && DIST < SPEED_OF_SOUND * EARLY_REF_SECONDS)
             {
-                image_source [i * NUM_IMAGE_SOURCE + index] = (Impulse)
-                {   volume * (VolumeType) 0.0000001
-                ,   -DIR
-                ,   SECONDS_PER_METER * DIST
-#ifdef DIAGNOSTIC
+                image_source [i * NUM_IMAGE_SOURCE + index + 0] = (Impulse)
+                {   volume * attenuation_for_distance (DIST)
                 ,   mic_reflection
-#endif
+                ,   SECONDS_PER_METER * DIST
                 };
             }
         }
@@ -406,11 +413,8 @@ kernel void raytrace
                 )
             :   0
             )
-        ,   -direction
-        ,   SECONDS_PER_METER * DIST
-#ifdef DIAGNOSTIC
         ,   intersection
-#endif
+        ,   SECONDS_PER_METER * DIST
         };
 
         Ray newRay = triangle_reflectAt
@@ -426,6 +430,12 @@ kernel void raytrace
     }
 }
 
+float3 directionFromPosition (float3 position, float3 mic);
+float3 directionFromPosition (float3 position, float3 mic)
+{
+    return normalize (mic - position);
+}
+
 float speaker_attenuation (Speaker * speaker, float3 direction);
 float speaker_attenuation (Speaker * speaker, float3 direction)
 {
@@ -437,7 +447,8 @@ float speaker_attenuation (Speaker * speaker, float3 direction)
 }
 
 kernel void attenuate
-(   global Impulse * impulsesIn
+(   float3 mic_pos
+,   global Impulse * impulsesIn
 ,   global Impulse * impulsesOut
 ,   unsigned long outputOffset
 ,   Speaker speaker
@@ -449,11 +460,11 @@ kernel void attenuate
     {
         const float ATTENUATION = speaker_attenuation
         (   &speaker
-        ,   impulsesIn [j].direction
+        ,   directionFromPosition (impulsesIn [j].position, mic_pos)
         );
         impulsesOut [j] = (Impulse)
         {   impulsesIn [j].volume * ATTENUATION
-        ,   impulsesIn [j].direction
+        ,   impulsesIn [j].position
         ,   impulsesIn [j].time
         };
     }
@@ -508,15 +519,25 @@ VolumeType hrtf_attenuation
 }
 
 kernel void hrtf
-(   global Impulse * impulsesIn
+(   float3 mic_pos
+,   global Impulse * impulsesIn
 ,   global Impulse * impulsesOut
 ,   unsigned long outputOffset
 ,   global VolumeType * hrtfData
 ,   float3 pointing
 ,   float3 up
+,   unsigned long channel
 )
 {
     size_t i = get_global_id (0);
+    const float WIDTH = 0.1;
+
+    float3 ear_pos = transform
+    (   pointing
+    ,   up
+    ,   (float3) {channel == 0 ? -WIDTH : WIDTH, 0, 0}
+    ) + mic_pos;
+
     const unsigned long END = (i + 1) * outputOffset;
     for (unsigned long j = i * outputOffset; j != END; ++j)
     {
@@ -524,13 +545,17 @@ kernel void hrtf
         (   hrtfData
         ,   pointing
         ,   up
-        ,   impulsesIn [j].direction
+        ,   directionFromPosition (impulsesIn [j].position, mic_pos)
         );
+
+        const float dist0 = distance (impulsesIn [j].position, mic_pos);
+        const float dist1 = distance (impulsesIn [j].position, ear_pos);
+        const float diff = dist1 - dist0;
 
         impulsesOut [j] = (Impulse)
         {   impulsesIn [j].volume * ATTENUATION
-        ,   impulsesIn [j].direction
-        ,   impulsesIn [j].time
+        ,   impulsesIn [j].position
+        ,   impulsesIn [j].time + diff * SECONDS_PER_METER
         };
     }
 }

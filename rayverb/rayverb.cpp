@@ -24,32 +24,6 @@ inline cl_float3 fromAIVec (const aiVector3D & v)
     return (cl_float3) {v.x, v.y, v.z, 0};
 }
 
-/*
-vector <VolumeType> flattenImpulses
-(   const vector <Impulse> & impulse
-,   float samplerate
-)
-{
-    const auto MAX_TIME = accumulate
-    (   impulse.begin()
-    ,   impulse.end()
-    ,   0.0f
-    ,   [] (float a, const Impulse & b) {return max (a, b.time);}
-    );
-    const auto MAX_SAMPLE = round (MAX_TIME * samplerate) + 1;
-
-    vector <VolumeType> flattened (MAX_SAMPLE, (VolumeType) {0});
-
-    for (auto && i : impulse)
-    {
-        const auto SAMPLE = round (i.time * samplerate);
-        flattened [SAMPLE] = sum (flattened [SAMPLE], i.volume);
-    }
-
-    return flattened;
-}
-*/
-
 vector <vector <vector <float>>> flattenImpulses
 (   const vector <vector <Impulse>> & attenuated
 ,   float samplerate
@@ -73,27 +47,24 @@ vector <vector <float>> flattenImpulses
 ,   float samplerate
 )
 {
-    const auto MAX_TIME = accumulate
-    (   impulse.begin()
-    ,   impulse.end()
-    ,   0.0f
-    ,   [] (float a, const Impulse & b) {return max (a, b.time);}
-    );
-    const auto MAX_SAMPLE = round (MAX_TIME * samplerate) + 1;
+    float maxtime = 0;
+    for (const auto & i : impulse)
+        maxtime = max (maxtime, i.time);
+    const auto MAX_SAMPLE = round (maxtime * samplerate) + 1;
 
     vector <vector <float>> flattened
     (   sizeof (VolumeType) / sizeof (float)
     ,   vector <float> (MAX_SAMPLE, 0)
     );
-
     for (auto j = 0; j != flattened.size(); ++j)
     {
-        for (auto && i : impulse)
+        for (const auto & i : impulse)
         {
             const auto SAMPLE = round (i.time * samplerate);
             flattened [j] [SAMPLE] += i.volume.s [j];
         }
     }
+
     return flattened;
 }
 
@@ -602,10 +573,29 @@ void Scene::trace
     }
 }
 
-vector <Impulse> Scene::attenuate (const Speaker & speaker)
+vector <vector <Impulse>> Scene::attenuate
+(   const cl_float3 & mic_pos
+,   const vector <Speaker> & speakers
+)
+{
+    vector <vector <Impulse>> attenuated (speakers.size());
+    transform
+    (   begin (speakers)
+    ,   end (speakers)
+    ,   begin (attenuated)
+    ,   [this, mic_pos] (const Speaker & i) {return attenuate (mic_pos, i);}
+    );
+    return attenuated;
+}
+
+vector <Impulse> Scene::attenuate
+(   const cl_float3 & mic_pos
+,   const Speaker & speaker
+)
 {
     auto attenuate = cl::make_kernel
-    <   cl::Buffer
+    <   cl_float3
+    ,   cl::Buffer
     ,   cl::Buffer
     ,   cl_ulong
     ,   Speaker
@@ -631,6 +621,7 @@ vector <Impulse> Scene::attenuate (const Speaker & speaker)
 
         attenuate
         (   cl::EnqueueArgs (queue, cl::NDRange (RAY_GROUP_SIZE))
+        ,   mic_pos
         ,   cl_impulses
         ,   cl_attenuated
         ,   nreflections
@@ -645,6 +636,7 @@ vector <Impulse> Scene::attenuate (const Speaker & speaker)
 
         attenuate
         (   cl::EnqueueArgs (queue, cl::NDRange (RAY_GROUP_SIZE))
+        ,   mic_pos
         ,   cl_image_source
         ,   cl_attenuated
         ,   NUM_IMAGE_SOURCE
@@ -658,7 +650,7 @@ vector <Impulse> Scene::attenuate (const Speaker & speaker)
         );
     }
 
-    retDiffuse.insert (retDiffuse.end(), retImage.begin(), retImage.end());
+    //retDiffuse.insert (retDiffuse.end(), retImage.begin(), retImage.end());
     return retDiffuse;
 }
 
@@ -672,20 +664,9 @@ vector <Impulse> Scene::getRawImages()
     return storedImage;
 }
 
-vector <vector <Impulse>> Scene::attenuate (const vector <Speaker> & speakers)
-{
-    vector <vector <Impulse>> attenuated (speakers.size());
-    transform
-    (   begin (speakers)
-    ,   end (speakers)
-    ,   begin (attenuated)
-    ,   [this] (const Speaker & i) {return attenuate (i);}
-    );
-    return attenuated;
-}
-
 vector <vector <Impulse>> Scene::hrtf
-(   const cl_float3 & facing
+(   const cl_float3 & mic_pos
+,   const cl_float3 & facing
 ,   const cl_float3 & up
 )
 {
@@ -701,13 +682,17 @@ vector <vector <Impulse>> Scene::hrtf
     (   begin (channels)
     ,   end (channels)
     ,   begin (attenuated)
-    ,   [this, facing, up] (unsigned long i) {return hrtf (i, facing, up);}
+    ,   [this, mic_pos, facing, up] (unsigned long i)
+        {
+            return hrtf (mic_pos, i, facing, up);
+        }
     );
     return attenuated;
 }
 
 vector <Impulse> Scene::hrtf
-(   unsigned long channel
+(   const cl_float3 & mic_pos
+,   unsigned long channel
 ,   const cl_float3 & facing
 ,   const cl_float3 & up
 )
@@ -729,12 +714,14 @@ vector <Impulse> Scene::hrtf
     );
 
     auto hrtf = cl::make_kernel
-    <   cl::Buffer
+    <   cl_float3
+    ,   cl::Buffer
     ,   cl::Buffer
     ,   cl_ulong
     ,   cl::Buffer
     ,   cl_float3
     ,   cl_float3
+    ,   cl_ulong
     > (cl_program, "hrtf");
 
     vector <Impulse> retDiffuse (ngroups * RAY_GROUP_SIZE * nreflections);
@@ -757,12 +744,14 @@ vector <Impulse> Scene::hrtf
 
         hrtf
         (   cl::EnqueueArgs (queue, cl::NDRange (RAY_GROUP_SIZE))
+        ,   mic_pos
         ,   cl_impulses
         ,   cl_attenuated
         ,   nreflections
         ,   cl_hrtf
         ,   facing
         ,   up
+        ,   channel
         );
         cl::copy
         (   queue
@@ -773,12 +762,14 @@ vector <Impulse> Scene::hrtf
 
         hrtf
         (   cl::EnqueueArgs (queue, cl::NDRange (RAY_GROUP_SIZE))
+        ,   mic_pos
         ,   cl_image_source
         ,   cl_attenuated
         ,   NUM_IMAGE_SOURCE
         ,   cl_hrtf
         ,   facing
         ,   up
+        ,   channel
         );
         cl::copy
         (   queue
@@ -788,6 +779,6 @@ vector <Impulse> Scene::hrtf
         );
     }
 
-    retDiffuse.insert (retDiffuse.end(), retImage.begin(), retImage.end());
+    //retDiffuse.insert (retDiffuse.end(), retImage.begin(), retImage.end());
     return retDiffuse;
 }

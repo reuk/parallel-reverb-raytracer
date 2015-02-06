@@ -45,8 +45,6 @@ dir of the project.
 to do
 -----
 
-* Throw an error if an object is invalid / contains invalid materials.
-
 * Consider faster intersection-calcluation algorithms
     * Might actually end up slower due to increased divergence
 
@@ -74,6 +72,6 @@ to do
 * generate a whole bunch of sample reverbs
     * build a max patch for auditioning them
 
-* hrtf delay based on angle / distance
-
 * image-source fix - keep track of different paths
+
+* trim output so we don't have to filter as much

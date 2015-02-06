@@ -53,6 +53,7 @@ typedef struct  {
     VolumeType volume;
     cl_float3 direction;
     cl_float time;
+    cl_ulong triangle;
 #ifdef DIAGNOSTIC
     cl_float3 position;
 #endif
@@ -281,22 +282,28 @@ public:
     std::vector <Impulse> getRawImages();
 
     /// Get attenuated impulses for a particular speaker.
-    std::vector <Impulse> attenuate (const Speaker & speaker);
+    std::vector <Impulse> attenuate
+    (   const cl_float3 & mic_pos
+    ,   const Speaker & speaker
+    );
 
     /// Get attenuated impulses for a vector of speakers.
     std::vector <std::vector <Impulse>>  attenuate
-    (   const std::vector <Speaker> & speakers
+    (   const cl_float3 & mic_pos
+    ,   const std::vector <Speaker> & speakers
     );
 
     /// Get attenuated impulses for two channels of hrtf.
     std::vector <std::vector <Impulse>> hrtf
-    (   const cl_float3 & facing
+    (   const cl_float3 & mic_pos
+    ,   const cl_float3 & facing
     ,   const cl_float3 & up
     );
 
 private:
     std::vector <Impulse> hrtf
-    (   unsigned long channel
+    (   const cl_float3 & mic_pos
+    ,   unsigned long channel
     ,   const cl_float3 & facing
     ,   const cl_float3 & up
     );

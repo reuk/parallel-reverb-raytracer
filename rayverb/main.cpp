@@ -329,10 +329,10 @@ int main(int argc, const char * argv[])
         switch (mode)
         {
         case SPEAKER:
-            attenuated = scene.attenuate (speakers);
+            attenuated = scene.attenuate (mic, speakers);
             break;
         case HRTF:
-            attenuated = scene.hrtf(facing, up);
+            attenuated = scene.hrtf(mic, facing, up);
             break;
         default:
             cerr << "This point should never be reached. Aborting" << endl;
