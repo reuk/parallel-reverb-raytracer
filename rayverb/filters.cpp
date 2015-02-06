@@ -61,7 +61,7 @@ vector <float> lopassKernel (float sr, float cutoff, unsigned long length)
     ,   end (window)
     ,   begin (kernel)
     ,   begin (ret)
-    ,   [&] (float i, float j) { return i * j; }
+    ,   [] (float i, float j) { return i * j; }
     );
     float sum = accumulate (begin (ret), end (ret), 0.0);
     for (auto & i : ret) i /= sum;
@@ -170,8 +170,8 @@ vector <float> RayverbFiltering::BandpassWindowedSinc::bandpassKernel
     return fastConvolve (lop, hip);
 }
 
-vector <float> RayverbFiltering::BandpassBiquadOnepass::biquad
-(   const vector <float> & input
+void RayverbFiltering::BandpassBiquadOnepass::biquad
+(   vector <float> & input
 ,   double b0
 ,   double b1
 ,   double b2
@@ -179,22 +179,20 @@ vector <float> RayverbFiltering::BandpassBiquadOnepass::biquad
 ,   double a2
 )
 {
-    double z1 = 0, z2 = 0;
+    double z1 = 0;
+    double z2 = 0;
 
-    return map <vector <float>>
-    (   input
-    ,   [&] (float i)
-        {
-            double out = i * b0 + z1;
-            z1 = i * b1 + z2 - a1 * out;
-            z2 = i * b2 - a2 * out;
-            return out;
-        }
-    );
+    for (auto & i : input)
+    {
+        double out = i * b0 + z1;
+        z1 = i * b1 + z2 - a1 * out;
+        z2 = i * b2 - a2 * out;
+        i = out;
+    }
 }
 
-vector <float> RayverbFiltering::BandpassBiquadOnepass::filter
-(   const vector <float> & data
+void RayverbFiltering::BandpassBiquadOnepass::filter
+(   vector <float> & data
 ) const
 {
     const double c = sqrt (lo * hi);
@@ -221,7 +219,7 @@ vector <float> RayverbFiltering::BandpassBiquadOnepass::filter
     a1 *= nrm;
     a2 *= nrm;
 
-    return biquad
+    biquad
     (   data
     ,   b0
     ,   b1
@@ -231,14 +229,52 @@ vector <float> RayverbFiltering::BandpassBiquadOnepass::filter
     );
 }
 
-vector <float> RayverbFiltering::BandpassBiquadTwopass::filter
-(   const std::vector <float> & data
+void RayverbFiltering::BandpassBiquadTwopass::filter
+(   vector <float> & data
 ) const
 {
     BandpassBiquadOnepass b (lo, hi, sr);
-    vector <float> p1 = b.filter (data);
-    reverse (std::begin (p1), std::end (p1));
-    vector <float> p2 = b.filter (p1);
-    reverse (std::begin (p2), std::end (p2));
-    return p2;
+    b.filter (data);
+    reverse (std::begin (data), std::end (data));
+    b.filter (data);
+    reverse (std::begin (data), std::end (data));
+}
+
+void RayverbFiltering::BandpassWindowedSinc::filter
+(   vector <float> & data
+) const
+{
+    vector <float> kernel = bandpassKernel (sr, lo, hi, 31);
+    data = fastConvolve (data, kernel);
+}
+
+void RayverbFiltering::bandpass
+(   const FilterType filterType
+,   std::vector <float> & data
+,   float lo
+,   float hi
+,   float sr
+)
+{
+    switch (filterType)
+    {
+    case FILTER_TYPE_WINDOWED_SINC:
+        return BandpassWindowedSinc (lo, hi, sr).filter (data);
+    case FILTER_TYPE_BIQUAD_ONEPASS:
+        return BandpassBiquadOnepass (lo, hi, sr).filter (data);
+    case FILTER_TYPE_BIQUAD_TWOPASS:
+        return BandpassBiquadTwopass (lo, hi, sr).filter (data);
+    }
+}
+
+void RayverbFiltering::filter
+(   FilterType ft
+,   std::vector <std::vector <float>> & data
+,   float sr
+)
+{
+    std::vector <float> edges =
+        {1, 190, 380, 760, 1520, 3040, 6080, 12160, 20000};
+    for (unsigned long i = 0; i != data.size(); ++i)
+        bandpass (ft, data [i], edges [i], edges [i + 1], sr);
 }

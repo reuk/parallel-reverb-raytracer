@@ -19,57 +19,81 @@
 using namespace std;
 using namespace rapidjson;
 
-cl_float3 fromAIVec (const aiVector3D & v)
+inline cl_float3 fromAIVec (const aiVector3D & v)
 {
     return (cl_float3) {v.x, v.y, v.z, 0};
 }
 
-struct LatestImpulse: public binary_function <Impulse, Impulse, bool>
-{
-    inline bool operator() (const Impulse & a, const Impulse & b) const
-    {
-        return a.time < b.time;
-    }
-};
-
+/*
 vector <VolumeType> flattenImpulses
 (   const vector <Impulse> & impulse
 ,   float samplerate
 )
 {
-    const float MAX_TIME = max_element
-    (   begin (impulse)
-    ,   end (impulse)
-    ,   LatestImpulse()
-    )->time;
-    const unsigned long MAX_SAMPLE = round (MAX_TIME * samplerate) + 1;
+    const auto MAX_TIME = accumulate
+    (   impulse.begin()
+    ,   impulse.end()
+    ,   0.0f
+    ,   [] (float a, const Impulse & b) {return max (a, b.time);}
+    );
+    const auto MAX_SAMPLE = round (MAX_TIME * samplerate) + 1;
 
     vector <VolumeType> flattened (MAX_SAMPLE, (VolumeType) {0});
 
     for (auto && i : impulse)
     {
-        const unsigned long SAMPLE = round (i.time * samplerate);
+        const auto SAMPLE = round (i.time * samplerate);
         flattened [SAMPLE] = sum (flattened [SAMPLE], i.volume);
     }
 
     return flattened;
 }
+*/
 
-vector <vector <VolumeType>> flattenImpulses
+vector <vector <vector <float>>> flattenImpulses
 (   const vector <vector <Impulse>> & attenuated
 ,   float samplerate
 )
 {
-    vector <vector <VolumeType>> flattened (attenuated.size());
+    vector <vector <vector <float>>> flattened (attenuated.size());
     transform
     (   begin (attenuated)
     ,   end (attenuated)
     ,   begin (flattened)
-    ,   [&] (const vector <Impulse> & i)
+    ,   [samplerate] (const vector <Impulse> & i)
         {
             return flattenImpulses (i, samplerate);
         }
     );
+    return flattened;
+}
+
+vector <vector <float>> flattenImpulses
+(   const vector <Impulse> & impulse
+,   float samplerate
+)
+{
+    const auto MAX_TIME = accumulate
+    (   impulse.begin()
+    ,   impulse.end()
+    ,   0.0f
+    ,   [] (float a, const Impulse & b) {return max (a, b.time);}
+    );
+    const auto MAX_SAMPLE = round (MAX_TIME * samplerate) + 1;
+
+    vector <vector <float>> flattened
+    (   sizeof (VolumeType) / sizeof (float)
+    ,   vector <float> (MAX_SAMPLE, 0)
+    );
+
+    for (auto j = 0; j != flattened.size(); ++j)
+    {
+        for (auto && i : impulse)
+        {
+            const auto SAMPLE = round (i.time * samplerate);
+            flattened [j] [SAMPLE] += i.volume.s [j];
+        }
+    }
     return flattened;
 }
 
@@ -81,7 +105,7 @@ vector <float> sum (const vector <T> & data)
     (   begin (data)
     ,   end (data)
     ,   begin (ret)
-    ,   [&] (const T & i)
+    ,   [] (const T & i)
         {
             return accumulate (i.s, i.s + sizeof (T) / sizeof (float), 0.0);
         }
@@ -89,25 +113,42 @@ vector <float> sum (const vector <T> & data)
     return ret;
 }
 
+vector <float> mixdown (const vector <vector <float>> & data)
+{
+    vector <float> ret (data.front().size(), 0);
+    for (auto & i : data)
+        transform
+        (   ret.begin()
+        ,   ret.end()
+        ,   i.begin()
+        ,   ret.begin()
+        ,   [] (float a, float b) {return a + b;}
+        );
+    return ret;
+}
+
 vector <vector <float>> process
 (   RayverbFiltering::FilterType filtertype
-,   vector <vector <VolumeType>> & data
+,   vector <vector <vector <float>>> & data
 ,   float sr
 )
 {
     vector <vector <float>> ret (data.size());
-
-    for (int i = 0; i != data.size(); ++i)
-    {
-        ret [i] = RayverbFiltering::filter
-        (   filtertype
-        ,   data[i]
-        ,   sr
-        );
-    }
-
+    transform
+    (   data.begin()
+    ,   data.end()
+    ,   ret.begin()
+    ,   [filtertype, sr] (vector <vector <float>> & i)
+        {
+            RayverbFiltering::filter
+            (   filtertype
+            ,   i
+            ,   sr
+            );
+            return mixdown (i);
+        }
+    );
     normalize (ret);
-
     return ret;
 }
 
@@ -638,7 +679,7 @@ vector <vector <Impulse>> Scene::attenuate (const vector <Speaker> & speakers)
     (   begin (speakers)
     ,   end (speakers)
     ,   begin (attenuated)
-    ,   [&] (const Speaker & i) {return attenuate (i);}
+    ,   [this] (const Speaker & i) {return attenuate (i);}
     );
     return attenuated;
 }
@@ -660,7 +701,7 @@ vector <vector <Impulse>> Scene::hrtf
     (   begin (channels)
     ,   end (channels)
     ,   begin (attenuated)
-    ,   [&] (unsigned long i) {return hrtf (i, facing, up);}
+    ,   [this, facing, up] (unsigned long i) {return hrtf (i, facing, up);}
     );
     return attenuated;
 }

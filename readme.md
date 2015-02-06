@@ -50,10 +50,6 @@ to do
 * Consider faster intersection-calcluation algorithms
     * Might actually end up slower due to increased divergence
 
-* Add a proper testing framework
-    * Aim for coverage of all the library-visible functions first
-    * Then for coverage of internal functions if time
-
 * low frequency estimation?
     * check limiting factors
     * look for different approaches
@@ -61,6 +57,10 @@ to do
 
 * look into different filtering/band-splitting methods
     * check crossover of two-pass biquad filters
+
+* Add a proper testing framework
+    * Aim for coverage of all the library-visible functions first
+    * Then for coverage of internal functions if time
 
 * Add a (filtered) direct image of the source to the output
 

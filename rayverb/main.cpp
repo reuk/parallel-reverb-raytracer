@@ -71,16 +71,13 @@ void flatten_and_write
 ,   unsigned long bd
 )
 {
-    vector <vector <VolumeType>> flattened = flattenImpulses
-    (   impulses
-    ,   sr
-    );
-    vector <vector <float>> outdata = process
+    auto flattened = flattenImpulses (impulses, sr);
+    auto processed = process
     (   RayverbFiltering::FILTER_TYPE_BIQUAD_TWOPASS
     ,   flattened
     ,   sr
     );
-    write_aiff (fname, outdata, sr, bd);
+    write_aiff (fname, processed, sr, bd);
 }
 
 bool validateJson3dVector (const Value & value)

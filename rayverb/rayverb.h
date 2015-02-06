@@ -72,13 +72,13 @@ typedef _Speaker_unalign __attribute__ ((aligned(8))) Speaker;
 /// Sum impulses ocurring at the same (sampled) time and return a vector in
 /// which each subsequent item refers to the next sample of an impulse
 /// response.
-std::vector <VolumeType> flattenImpulses
+std::vector <std::vector <float>> flattenImpulses
 (   const std::vector <Impulse> & impulse
 ,   float samplerate
 );
 
 /// Maps flattenImpulses over a vector of input vectors.
-std::vector <std::vector <VolumeType>> flattenImpulses
+std::vector <std::vector <std::vector <float>>> flattenImpulses
 (   const std::vector <std::vector <Impulse>> & impulse
 ,   float samplerate
 );
@@ -86,8 +86,8 @@ std::vector <std::vector <VolumeType>> flattenImpulses
 /// Filter each channel of the input data, then normalize all channels.
 std::vector <std::vector <float>> process
 (   RayverbFiltering::FilterType filtertype
-,   std::vector <std::vector <VolumeType>> & data
-,   float samplerate
+,   std::vector <std::vector <std::vector <float>>> & data
+,   float sr
 );
 
 //  These next few functions are recursive template metaprogramming magic
@@ -164,16 +164,12 @@ struct std::plus <cl_float8>
 {
     inline cl_float8 operator() (const cl_float8 & a, const cl_float8 & b) const
     {
-        return (cl_float8)
-        {   a.s [0] + b.s [0]
-        ,   a.s [1] + b.s [1]
-        ,   a.s [2] + b.s [2]
-        ,   a.s [3] + b.s [3]
-        ,   a.s [4] + b.s [4]
-        ,   a.s [5] + b.s [5]
-        ,   a.s [6] + b.s [6]
-        ,   a.s [7] + b.s [7]
-        };
+        constexpr auto LIM = sizeof (cl_float8) / sizeof (float);
+
+        cl_float8 ret;
+        for (auto i = 0; i != LIM; ++i)
+            ret.s [i] = a.s [i] + b.s [i];
+        return ret;
     }
 };
 
@@ -335,7 +331,7 @@ private:
     ,   bool verbose = false
     );
 
-    static const int RAY_GROUP_SIZE = 1024;
+    static const int RAY_GROUP_SIZE = 4096;
     static const std::string KERNEL_STRING;
     static const std::array <std::array <std::array <cl_float8, 180>, 360>, 2> HRTF_DATA;
 
