@@ -20,7 +20,7 @@ You also need the following libraries installed in a standard location (probably
 
 If you're on a Mac with homebrew you can set-up and build with:
 
-```
+```bash
 brew install cmake fftw assimp libsndfile
 # rapidjson is a bit special because it doesn't have a stable branch
 brew install --HEAD homebrew/head-only/rapidjson
