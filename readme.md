@@ -16,11 +16,14 @@ You also need the following libraries installed in a standard location (probably
 * FFTW (fftw3f)
 * Assimp
 * Libsndfile
+* rapidjson (although this is header-only)
 
 If you're on a Mac with homebrew you can set-up and build with:
 
 ```
 brew install cmake fftw assimp libsndfile
+# rapidjson is a bit special because it doesn't have a stable branch
+brew install --HEAD homebrew/head-only/rapidjson
 
 cd <path to repo>
 mkdir build
