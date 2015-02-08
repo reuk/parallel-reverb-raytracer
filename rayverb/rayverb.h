@@ -51,12 +51,8 @@ typedef _Surface_unalign __attribute__ ((aligned(8))) Surface;
 /// which it came (useful for attenuation/hrtf stuff).
 typedef struct  {
     VolumeType volume;
-    cl_float3 direction;
-    cl_float time;
-    cl_ulong triangle;
-#ifdef DIAGNOSTIC
     cl_float3 position;
-#endif
+    cl_float time;
 } _Impulse_unalign;
 
 typedef _Impulse_unalign __attribute__ ((aligned(8))) Impulse;
@@ -343,6 +339,7 @@ private:
     static const std::array <std::array <std::array <cl_float8, 180>, 360>, 2> HRTF_DATA;
 
     cl::Buffer cl_image_source;
+    cl::Buffer cl_image_source_index;
 
     std::vector <Impulse> storedDiffuse;
     std::vector <Impulse> storedImage;

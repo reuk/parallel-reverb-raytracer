@@ -361,7 +361,7 @@ int main(int argc, const char * argv[])
         return 1;
     }
 
-    fixPredelay (attenuated, mic, source);
+    //fixPredelay (attenuated, mic, source);
     flatten_and_write (output_filename, attenuated, sampleRate, bitDepth);
 
 #ifdef DIAGNOSTIC

@@ -60,8 +60,6 @@ to do
     * Aim for coverage of all the library-visible functions first
     * Then for coverage of internal functions if time
 
-* Add a (filtered) direct image of the source to the output
-
 * image source stuff
     * backwards visiblity checks
     * keep track of valid paths
@@ -71,7 +69,5 @@ to do
 
 * generate a whole bunch of sample reverbs
     * build a max patch for auditioning them
-
-* image-source fix - keep track of different paths
 
 * trim output so we don't have to filter as much

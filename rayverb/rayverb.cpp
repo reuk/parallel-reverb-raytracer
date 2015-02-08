@@ -15,6 +15,7 @@
 #include <streambuf>
 #include <sstream>
 #include <map>
+#include <iomanip>
 
 using namespace std;
 using namespace rapidjson;
@@ -157,6 +158,11 @@ Scene::Scene
     (   cl_context
     ,   CL_MEM_READ_WRITE
     ,   RAY_GROUP_SIZE * NUM_IMAGE_SOURCE * sizeof (Impulse)
+    )
+,   cl_image_source_index
+    (   cl_context
+    ,   CL_MEM_READ_WRITE
+    ,   RAY_GROUP_SIZE * NUM_IMAGE_SOURCE * sizeof (cl_ulong)
     )
 {
     cl_program = cl::Program (cl_context, KERNEL_STRING, false);
@@ -521,6 +527,7 @@ void Scene::trace
     ,   cl::Buffer
     ,   cl::Buffer
     ,   cl::Buffer
+    ,   cl::Buffer
     ,   cl_ulong
     > (cl_program, "raytrace");
 
@@ -529,7 +536,9 @@ void Scene::trace
     storedDiffuse.resize (ngroups * RAY_GROUP_SIZE * nreflections);
     storedImage.resize (ngroups * RAY_GROUP_SIZE * NUM_IMAGE_SOURCE);
 
-    for (int i = 0; i != ngroups; ++i)
+    map <vector <unsigned long>, Impulse> imageSourceTally;
+
+    for (auto i = 0; i != ngroups; ++i)
     {
         cl::copy
         (   queue
@@ -538,11 +547,22 @@ void Scene::trace
         ,   cl_directions
         );
 
-        vector <Impulse> diffuse (RAY_GROUP_SIZE * nreflections, (Impulse) {0});
+        vector <Impulse> diffuse
+            (RAY_GROUP_SIZE * nreflections, (Impulse) {0});
         cl::copy (queue, begin (diffuse), end (diffuse), cl_impulses);
 
-        vector <Impulse> image (RAY_GROUP_SIZE * NUM_IMAGE_SOURCE, (Impulse) {0});
+        vector <Impulse> image
+            (RAY_GROUP_SIZE * NUM_IMAGE_SOURCE, (Impulse) {0});
         cl::copy (queue, begin (image), end (image), cl_image_source);
+
+        vector <unsigned long> image_source_index
+            (RAY_GROUP_SIZE * NUM_IMAGE_SOURCE, 0);
+        cl::copy
+        (   queue
+        ,   begin (image_source_index)
+        ,   end (image_source_index)
+        ,   cl_image_source_index
+        );
 
         raytrace
         (   cl::EnqueueArgs (queue, cl::NDRange (RAY_GROUP_SIZE))
@@ -555,8 +575,41 @@ void Scene::trace
         ,   cl_surfaces
         ,   cl_impulses
         ,   cl_image_source
+        ,   cl_image_source_index
         ,   nreflections
         );
+
+        cl::copy
+        (   queue
+        ,   cl_image_source_index
+        ,   begin (image_source_index)
+        ,   end (image_source_index)
+        );
+        cl::copy (queue, cl_image_source, begin (image), end (image));
+
+        for
+        (   auto j = 0
+        ;   j != RAY_GROUP_SIZE * NUM_IMAGE_SOURCE
+        ;   j += NUM_IMAGE_SOURCE
+        )
+        {
+            for (auto k = 1; k != NUM_IMAGE_SOURCE + 1; ++k)
+            {
+                vector <unsigned long> surfaces
+                (   image_source_index.begin() + j
+                ,   image_source_index.begin() + j + k
+                );
+
+                if (k == 1 || surfaces.back() != 0)
+                {
+                    auto it = imageSourceTally.find (surfaces);
+                    if (it == imageSourceTally.end())
+                    {
+                        imageSourceTally [surfaces] = image [j + k - 1];
+                    }
+                }
+            }
+        }
 
         cl::copy
         (   queue
@@ -564,13 +617,15 @@ void Scene::trace
         ,   storedDiffuse.begin() + (i + 0) * RAY_GROUP_SIZE * nreflections
         ,   storedDiffuse.begin() + (i + 1) * RAY_GROUP_SIZE * nreflections
         );
-        cl::copy
-        (   queue
-        ,   cl_image_source
-        ,   storedImage.begin() + (i + 0) * RAY_GROUP_SIZE * NUM_IMAGE_SOURCE
-        ,   storedImage.begin() + (i + 1) * RAY_GROUP_SIZE * NUM_IMAGE_SOURCE
-        );
     }
+
+    storedImage.resize (imageSourceTally.size());
+    transform
+    (   begin (imageSourceTally)
+    ,   end (imageSourceTally)
+    ,   begin (storedImage)
+    ,   [] (const pair <vector <unsigned long>, Impulse> & i) {return i.second;}
+    );
 }
 
 vector <vector <Impulse>> Scene::attenuate
@@ -650,7 +705,7 @@ vector <Impulse> Scene::attenuate
         );
     }
 
-    //retDiffuse.insert (retDiffuse.end(), retImage.begin(), retImage.end());
+    retDiffuse.insert (retDiffuse.end(), retImage.begin(), retImage.end());
     return retDiffuse;
 }
 
@@ -779,6 +834,6 @@ vector <Impulse> Scene::hrtf
         );
     }
 
-    //retDiffuse.insert (retDiffuse.end(), retImage.begin(), retImage.end());
+    retDiffuse.insert (retDiffuse.end(), retImage.begin(), retImage.end());
     return retDiffuse;
 }
