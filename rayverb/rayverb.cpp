@@ -22,7 +22,7 @@ using namespace rapidjson;
 
 inline cl_float3 fromAIVec (const aiVector3D & v)
 {
-    return (cl_float3) {v.x, v.y, v.z, 0};
+    return (cl_float3) {{v.x, v.y, v.z, 0}};
 }
 
 vector <vector <vector <float>>> flattenImpulses
@@ -57,11 +57,12 @@ vector <vector <float>> flattenImpulses
     (   sizeof (VolumeType) / sizeof (float)
     ,   vector <float> (MAX_SAMPLE, 0)
     );
-    for (auto j = 0; j != flattened.size(); ++j)
+
+    for (const auto & i : impulse)
     {
-        for (const auto & i : impulse)
+        const auto SAMPLE = round (i.time * samplerate);
+        for (auto j = 0; j != flattened.size(); ++j)
         {
-            const auto SAMPLE = round (i.time * samplerate);
             flattened [j] [SAMPLE] += i.volume.s [j];
         }
     }
@@ -105,18 +106,14 @@ vector <vector <float>> process
 ,   float sr
 )
 {
+    RayverbFiltering::filter (filtertype, data, sr);
     vector <vector <float>> ret (data.size());
     transform
     (   data.begin()
     ,   data.end()
     ,   ret.begin()
-    ,   [filtertype, sr] (vector <vector <float>> & i)
+    ,   [] (vector <vector <float>> & i)
         {
-            RayverbFiltering::filter
-            (   filtertype
-            ,   i
-            ,   sr
-            );
             return mixdown (i);
         }
     );
@@ -281,8 +278,8 @@ public:
             throw runtime_error ("Failed to load object file.");
 
         Surface surface = {
-            (VolumeType) {0.02, 0.02, 0.03, 0.03, 0.04, 0.05, 0.05, 0.05},
-            (VolumeType) {0.50, 0.90, 0.95, 0.95, 0.95, 0.95, 0.95, 0.95}
+            (VolumeType) {{0.02, 0.02, 0.03, 0.03, 0.04, 0.05, 0.05, 0.05}},
+            (VolumeType) {{0.50, 0.90, 0.95, 0.95, 0.95, 0.95, 0.95, 0.95}}
         };
 
         surfaces.push_back (surface);
@@ -548,11 +545,11 @@ void Scene::trace
         );
 
         vector <Impulse> diffuse
-            (RAY_GROUP_SIZE * nreflections, (Impulse) {0});
+            (RAY_GROUP_SIZE * nreflections, (Impulse) {{{0}}});
         cl::copy (queue, begin (diffuse), end (diffuse), cl_impulses);
 
         vector <Impulse> image
-            (RAY_GROUP_SIZE * NUM_IMAGE_SOURCE, (Impulse) {0});
+            (RAY_GROUP_SIZE * NUM_IMAGE_SOURCE, (Impulse) {{{0}}});
         cl::copy (queue, begin (image), end (image), cl_image_source);
 
         vector <unsigned long> image_source_index
@@ -617,6 +614,15 @@ void Scene::trace
         ,   storedDiffuse.begin() + (i + 0) * RAY_GROUP_SIZE * nreflections
         ,   storedDiffuse.begin() + (i + 1) * RAY_GROUP_SIZE * nreflections
         );
+    }
+
+    for (const auto & j : imageSourceTally)
+    {
+        for (const auto & k : j.first)
+        {
+            cout << k << " ";
+        }
+        cout << endl;
     }
 
     storedImage.resize (imageSourceTally.size());

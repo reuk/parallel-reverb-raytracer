@@ -23,7 +23,7 @@ cl_float3 normalize (const cl_float3 & v)
 {
     cl_float len =
         1.0 / sqrt (v.s [0] * v.s [0] + v.s [1] * v.s [1] + v.s [2] * v.s [2]);
-    return {v.s [0] * len, v.s [1] * len, v.s [2] * len};
+    return {{v.s [0] * len, v.s [1] * len, v.s [2] * len}};
 }
 
 void write_aiff
@@ -58,7 +58,9 @@ void write_aiff
     }
     else
     {
-        cerr << "Can't write a file with that bit-depth. Supported bit-depths:" << endl;
+        cerr
+        <<  "Can't write a file with that bit-depth. Supported bit-depths:"
+        <<  endl;
         for (const auto & j : depthTable)
             cerr << "    " << j.first << endl;
     }
@@ -99,9 +101,9 @@ bool validateJson3dVector (const Value & value)
 cl_float3 getJson3dVector (const Value & value)
 {
     return
-    {   static_cast <cl_float> (value [(SizeType) 0].GetDouble())
+    {   {static_cast <cl_float> (value [(SizeType) 0].GetDouble())
     ,   static_cast <cl_float> (value [(SizeType) 1].GetDouble())
-    ,   static_cast <cl_float> (value [(SizeType) 2].GetDouble())
+    ,   static_cast <cl_float> (value [(SizeType) 2].GetDouble())}
     };
 }
 
@@ -134,8 +136,8 @@ int main(int argc, const char * argv[])
     string material_filename (argv [3]);
     string output_filename (argv [4]);
 
-    cl_float3 source = {0, 0, 0, 0};
-    cl_float3 mic = {0, 0, 1, 0};
+    cl_float3 source = {{0, 0, 0, 0}};
+    cl_float3 mic = {{0, 0, 1, 0}};
 
     auto numRays = 1024 * 8;
     auto numImpulses = 64;
@@ -164,7 +166,11 @@ int main(int argc, const char * argv[])
     {
         if (! document.HasMember (i.second.c_str()))
         {
-            cerr << "Key '" << i.second << "' is required in json configuration object" << endl;
+            cerr
+            <<  "Key '"
+            <<  i.second
+            <<  "' is required in json configuration object"
+            <<  endl;
             return 1;
         }
     }
@@ -174,7 +180,11 @@ int main(int argc, const char * argv[])
         auto str = requiredKeys [i].c_str();
         if (! validateJson3dVector (document [str]))
         {
-            cerr << "Value for " << str << " must be a 3-element numeric array" << endl;
+            cerr
+            <<  "Value for "
+            <<  str
+            <<  " must be a 3-element numeric array"
+            <<  endl;
             return 1;
         }
     }
@@ -203,8 +213,8 @@ int main(int argc, const char * argv[])
     };
 
     auto mode = HRTF;
-    cl_float3 facing = {0, 0, 1};
-    cl_float3 up = {0, 1, 0};
+    cl_float3 facing = {{0, 0, 1}};
+    cl_float3 up = {{0, 1, 0}};
     vector <Speaker> speakers;
 
     auto count = 0;
@@ -216,7 +226,9 @@ int main(int argc, const char * argv[])
 
     if (count != 1)
     {
-        cerr << "Config object must contain information for exactly one of these keys:" << endl;
+        cerr
+        <<  "Config object must contain information for exactly one of these keys:"
+        <<  endl;
         for (const auto & i : modeKeys)
             cerr << "    " << i.second << endl;
 
@@ -230,7 +242,9 @@ int main(int argc, const char * argv[])
 
         if (! v.IsArray())
         {
-            cerr << "Speaker definitions must be stored in a json array" << endl;
+            cerr
+            <<  "Speaker definitions must be stored in a json array"
+            <<  endl;
             return 1;
         }
 
@@ -240,13 +254,19 @@ int main(int argc, const char * argv[])
 
             if (! i->HasMember (direction))
             {
-                cerr << "Speaker definition must contain direction vector" << endl;
+                cerr
+                <<  "Speaker definition must contain direction vector"
+                <<  endl;
                 return 1;
             }
 
             if (! validateJson3dVector ((*i) [direction]))
             {
-                cerr << "Value for " << direction << " must be a 3-element numeric array" << endl;
+                cerr
+                <<  "Value for "
+                <<  direction
+                <<  " must be a 3-element numeric array"
+                <<  endl;
                 return 1;
             }
 
@@ -254,7 +274,9 @@ int main(int argc, const char * argv[])
 
             if (! i->HasMember (shape))
             {
-                cerr << "Speaker definition must contain shape parameter" << endl;
+                cerr
+                <<  "Speaker definition must contain shape parameter"
+                <<  endl;
                 return 1;
             }
 
@@ -281,25 +303,41 @@ int main(int argc, const char * argv[])
 
         if (! v.HasMember (facing_str))
         {
-            cerr << "HRTF definition must contain " << facing_str << " vector" << endl;
+            cerr
+            <<  "HRTF definition must contain "
+            <<  facing_str
+            <<  " vector"
+            <<  endl;
             return 1;
         }
 
         if (! v.HasMember (up_str))
         {
-            cerr << "HRTF definition must contain " << up_str << " vector" << endl;
+            cerr
+            <<  "HRTF definition must contain "
+            <<  up_str
+            <<  " vector"
+            <<  endl;
             return 1;
         }
 
         if (! validateJson3dVector (v [facing_str]))
         {
-            cerr << "Value for " << facing_str << " must be a 3-element numeric array" << endl;
+            cerr
+            <<  "Value for "
+            <<  facing_str
+            <<  " must be a 3-element numeric array"
+            <<  endl;
             return 1;
         }
 
         if (! validateJson3dVector (v [up_str]))
         {
-            cerr << "Value for " << up_str << " must be a 3-element numeric array" << endl;
+            cerr
+            <<  "Value for "
+            <<  up_str
+            <<  " must be a 3-element numeric array"
+            <<  endl;
             return 1;
         }
 

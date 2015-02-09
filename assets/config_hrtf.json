@@ -1,9 +1,9 @@
 {
     "source_position": [0, -50, 20],
-    "mic_position": [-5, -55, 25],
+    "mic_position": [-5, -125, 25],
     "rays": 32768,
     "reflections": 128,
     "sample_rate": 44100,
     "bit_depth": 16,
-    "hrtf": {"facing": [5, 5, -5], "up": [0, 1, 0]}
+    "hrtf": {"facing": [5, 75, -5], "up": [0, 1, 0]}
 }

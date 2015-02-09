@@ -61,7 +61,7 @@ void print_diagnostic
 cl_float3 spherePoint (float z, float theta)
 {
     const float ztemp = sqrtf (1 - z * z);
-    return (cl_float3) {ztemp * cosf (theta), ztemp * sinf (theta), z, 0};
+    return (cl_float3) {{ztemp * cosf (theta), ztemp * sinf (theta), z, 0}};
 }
 
 vector <cl_float3> getRandomDirections (unsigned long num)

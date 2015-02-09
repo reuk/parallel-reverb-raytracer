@@ -1,6 +1,6 @@
 {
     "source_position": [0, -50, 20],
-    "mic_position": [-5, -55, 25],
+    "mic_position": [-5, -125, 25],
     "rays": 32768,
     "reflections": 64,
     "sample_rate": 44100,

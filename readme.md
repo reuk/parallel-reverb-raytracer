@@ -65,7 +65,6 @@ to do
 
 * image source stuff
     * backwards visiblity checks
-    * keep track of valid paths
 
 * check high frequency content - sounds a bit dull
     * might just be my test model
@@ -74,3 +73,5 @@ to do
     * build a max patch for auditioning them
 
 * trim output so we don't have to filter as much
+
+* arrays rather than vectors (?)

@@ -338,19 +338,77 @@ kernel void raytrace
             //  intersects all of the intermediate triangles.
             Ray toMic = {source, DIR};
             bool intersects = true;
-            for (unsigned int k = 0; intersects && (k != index); ++k)
+            for (unsigned long k = 0; k != index + 1; ++k)
             {
-                if
-                (   triangle_vert_intersection
+                const float TO_INTERSECTION = triangle_vert_intersection
+                (   prev_primitives [k].v0
+                ,   prev_primitives [k].v1
+                ,   prev_primitives [k].v2
+                ,   &toMic
+                );
+
+                if (TO_INTERSECTION <= EPSILON)
+                {
+                    intersects = false;
+                    break;
+                }
+            }
+
+            if (intersects)
+            {
+                float3 prevIntersection = source;
+                for (unsigned long k = 0; k != index + 1; ++k)
+                {
+                    const float TO_INTERSECTION = triangle_vert_intersection
                     (   prev_primitives [k].v0
                     ,   prev_primitives [k].v1
                     ,   prev_primitives [k].v2
                     ,   &toMic
-                    )
-                <=  EPSILON
-                )
+                    );
+
+                    float3 intersectionPoint = source + DIR * TO_INTERSECTION;
+                    for (long l = k - 1; l != -1; --l)
+                    {
+                        mirror_point (&intersectionPoint, prev_primitives + l);
+                    }
+
+                    Ray intermediate = {prevIntersection, normalize (intersectionPoint - prevIntersection)};
+                    Intersection inter = ray_triangle_intersection
+                    (   &intermediate
+                    ,   triangles
+                    ,   numtriangles
+                    ,   vertices
+                    );
+
+                    const bool IS_INTERSECTION = inter.intersects && all ((intermediate.position + intermediate.direction * inter.distance) == intersectionPoint);
+
+                    if (!IS_INTERSECTION)
+                    {
+                        intersects = false;
+                        break;
+                    }
+
+                    prevIntersection = intersectionPoint;
+                }
+
+                if (intersects)
                 {
-                    intersects = false;
+                    float3 intersectionPoint = position;
+
+                    Ray intermediate = {prevIntersection, normalize (intersectionPoint - prevIntersection)};
+                    Intersection inter = ray_triangle_intersection
+                    (   &intermediate
+                    ,   triangles
+                    ,   numtriangles
+                    ,   vertices
+                    );
+
+                    const bool IS_INTERSECTION = (!inter.intersects) || (inter.distance > length (intersectionPoint - prevIntersection));
+
+                    if (!IS_INTERSECTION)
+                    {
+                        intersects = false;
+                    }
                 }
             }
 

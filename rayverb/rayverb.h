@@ -146,10 +146,10 @@ struct std::plus <cl_float3>
     inline cl_float3 operator() (const cl_float3 & a, const cl_float3 & b) const
     {
         return (cl_float3)
-        {   a.s [0] + b.s [0]
+        {   {a.s [0] + b.s [0]
         ,   a.s [1] + b.s [1]
         ,   a.s [2] + b.s [2]
-        ,   a.s [3] + b.s [3]
+        ,   a.s [3] + b.s [3]}
         };
     }
 };
@@ -177,7 +177,7 @@ struct std::negate <cl_float3>
 {
     inline cl_float3 operator() (const cl_float3 & a) const
     {
-        return (cl_float3) {-a.s [0], -a.s [1], -a.s [2], -a.s [3]};
+        return (cl_float3) {{-a.s [0], -a.s [1], -a.s [2], -a.s [3]}};
     }
 };
 
@@ -307,8 +307,6 @@ private:
     unsigned long ngroups;
     const unsigned long nreflections;
     const unsigned long ntriangles;
-
-    unsigned long nhrtf;
 
     cl::Context & cl_context;
 

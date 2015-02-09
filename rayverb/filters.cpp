@@ -1,7 +1,5 @@
 #include "filters.h"
 
-#include "fftw3.h"
-
 #include <numeric>
 #include <iostream>
 
@@ -76,98 +74,17 @@ vector <float> hipassKernel (float sr, float cutoff, unsigned long length)
     return kernel;
 }
 
-void forward_fft
-(   fftwf_plan & plan
-,   const vector <float> & data
-,   float * i
-,   fftwf_complex * o
-,   unsigned long FFT_LENGTH
-,   fftwf_complex * results
-)
-{
-    const unsigned long CPLX_LENGTH = FFT_LENGTH / 2 + 1;
-
-    memset (i, 0, sizeof (float) * FFT_LENGTH);
-    memcpy (i, data.data(), sizeof (float) * data.size());
-    fftwf_execute (plan);
-    memcpy (results, o, sizeof (fftwf_complex) * CPLX_LENGTH);
-}
-
-vector <float> RayverbFiltering::BandpassWindowedSinc::fastConvolve
-(   const vector <float> & a
-,   const vector <float> & b
-)
-{
-    const unsigned long FFT_LENGTH = a.size() + b.size() - 1;
-    const unsigned long CPLX_LENGTH = FFT_LENGTH / 2 + 1;
-
-    float * r2c_i = fftwf_alloc_real (FFT_LENGTH);
-    fftwf_complex * r2c_o = fftwf_alloc_complex (CPLX_LENGTH);
-
-    fftwf_complex * acplx = fftwf_alloc_complex (CPLX_LENGTH);
-    fftwf_complex * bcplx = fftwf_alloc_complex (CPLX_LENGTH);
-
-    fftwf_plan r2c = fftwf_plan_dft_r2c_1d
-    (   FFT_LENGTH
-    ,   r2c_i
-    ,   r2c_o
-    ,   FFTW_ESTIMATE
-    );
-
-    forward_fft (r2c, a, r2c_i, r2c_o, FFT_LENGTH, acplx);
-    forward_fft (r2c, b, r2c_i, r2c_o, FFT_LENGTH, bcplx);
-
-    fftwf_destroy_plan (r2c);
-    fftwf_free (r2c_i);
-    fftwf_free (r2c_o);
-
-    fftwf_complex * c2r_i = fftwf_alloc_complex (CPLX_LENGTH);
-    float * c2r_o = fftwf_alloc_real (FFT_LENGTH);
-
-    memset (c2r_i, 0, sizeof (fftwf_complex) * CPLX_LENGTH);
-    memset (c2r_o, 0, sizeof (float) * FFT_LENGTH);
-
-    fftwf_complex * x = acplx;
-    fftwf_complex * y = bcplx;
-    fftwf_complex * z = c2r_i;
-
-    for (; z != c2r_i + CPLX_LENGTH; ++x, ++y, ++z)
-    {
-        (*z) [0] += (*x) [0] * (*y) [0] - (*x) [1] * (*y) [1];
-        (*z) [1] += (*x) [0] * (*y) [1] + (*x) [1] * (*y) [0];
-    }
-
-    fftwf_free (acplx);
-    fftwf_free (bcplx);
-
-    fftwf_plan c2r = fftwf_plan_dft_c2r_1d
-    (   FFT_LENGTH
-    ,   c2r_i
-    ,   c2r_o
-    ,   FFTW_ESTIMATE
-    );
-
-    fftwf_execute (c2r);
-    fftwf_destroy_plan (c2r);
-
-    vector <float> ret (c2r_o, c2r_o + FFT_LENGTH);
-
-    fftwf_free (c2r_i);
-    fftwf_free (c2r_o);
-
-    return ret;
-}
-
 vector <float> RayverbFiltering::BandpassWindowedSinc::bandpassKernel
 (   float sr
 ,   float lo
 ,   float hi
-,   unsigned long l
 )
 {
-    vector <float> lop = lopassKernel (sr, hi, l);
-    vector <float> hip = hipassKernel (sr, lo, l);
-    return fastConvolve (lop, hip);
+    vector <float> lop = lopassKernel (sr, hi, 1 + KERNEL_LENGTH / 2);
+    vector <float> hip = hipassKernel (sr, lo, 1 + KERNEL_LENGTH / 2);
+
+    FastConvolution fc (KERNEL_LENGTH);
+    return fc.convolve (lop, hip);
 }
 
 void RayverbFiltering::BandpassBiquadOnepass::biquad
@@ -193,7 +110,7 @@ void RayverbFiltering::BandpassBiquadOnepass::biquad
 
 void RayverbFiltering::BandpassBiquadOnepass::filter
 (   vector <float> & data
-) const
+)
 {
     const double c = sqrt (lo * hi);
     const double omega = 2 * M_PI * c / sr;
@@ -219,62 +136,105 @@ void RayverbFiltering::BandpassBiquadOnepass::filter
     a1 *= nrm;
     a2 *= nrm;
 
-    biquad
-    (   data
-    ,   b0
-    ,   b1
-    ,   b2
-    ,   a1
-    ,   a2
-    );
+    biquad (data, b0, b1, b2, a1, a2);
 }
 
-void RayverbFiltering::BandpassBiquadTwopass::filter
-(   vector <float> & data
-) const
+void RayverbFiltering::BandpassBiquadTwopass::filter (vector <float> & data)
 {
-    BandpassBiquadOnepass b (lo, hi, sr);
+    BandpassBiquadOnepass b;
+    b.setParams (lo, hi, sr);
     b.filter (data);
-    reverse (std::begin (data), std::end (data));
+    reverse (begin (data), end (data));
     b.filter (data);
-    reverse (std::begin (data), std::end (data));
+    reverse (begin (data), end (data));
 }
 
-void RayverbFiltering::BandpassWindowedSinc::filter
-(   vector <float> & data
-) const
+void RayverbFiltering::BandpassWindowedSinc::filter (vector <float> & data)
 {
-    vector <float> kernel = bandpassKernel (sr, lo, hi, 31);
-    data = fastConvolve (data, kernel);
+    data = convolve (kernel, data);
 }
 
-void RayverbFiltering::bandpass
-(   const FilterType filterType
-,   std::vector <float> & data
-,   float lo
-,   float hi
-,   float sr
+void RayverbFiltering::BandpassWindowedSinc::setParams
+(   float l
+,   float h
+,   float s
 )
 {
-    switch (filterType)
-    {
-    case FILTER_TYPE_WINDOWED_SINC:
-        return BandpassWindowedSinc (lo, hi, sr).filter (data);
-    case FILTER_TYPE_BIQUAD_ONEPASS:
-        return BandpassBiquadOnepass (lo, hi, sr).filter (data);
-    case FILTER_TYPE_BIQUAD_TWOPASS:
-        return BandpassBiquadTwopass (lo, hi, sr).filter (data);
-    }
+    auto i = bandpassKernel (s, l, h);
+    copy (i.begin(), i.end(), kernel.begin());
 }
 
 void RayverbFiltering::filter
 (   FilterType ft
-,   std::vector <std::vector <float>> & data
+,   vector <vector <vector <float>>> & data
 ,   float sr
 )
 {
-    std::vector <float> edges =
-        {1, 190, 380, 760, 1520, 3040, 6080, 12160, 20000};
-    for (unsigned long i = 0; i != data.size(); ++i)
-        bandpass (ft, data [i], edges [i], edges [i + 1], sr);
+    unique_ptr <Bandpass> bp;
+
+    switch (ft)
+    {
+    case FILTER_TYPE_WINDOWED_SINC:
+        bp = unique_ptr <Bandpass> (new BandpassWindowedSinc (data.front().front().size()));
+        break;
+    case FILTER_TYPE_BIQUAD_ONEPASS:
+        bp = unique_ptr <Bandpass> (new BandpassBiquadOnepass());
+        break;
+    case FILTER_TYPE_BIQUAD_TWOPASS:
+        bp = unique_ptr <Bandpass> (new BandpassBiquadTwopass());
+        break;
+    }
+
+    for (auto && channel : data)
+    {
+        const vector <float> EDGES
+            ({1, 190, 380, 760, 1520, 3040, 6080, 12160, 20000});
+
+        for (unsigned long i = 0; i != channel.size(); ++i)
+        {
+            bp->setParams (EDGES [i], EDGES [i + 1], sr);
+            bp->filter (channel [i]);
+        }
+    }
+}
+
+
+RayverbFiltering::FastConvolution::FastConvolution (unsigned long FFT_LENGTH)
+:   FFT_LENGTH (FFT_LENGTH)
+,   r2c_i (fftwf_alloc_real (FFT_LENGTH))
+,   r2c_o (fftwf_alloc_complex (CPLX_LENGTH))
+,   c2r_i (fftwf_alloc_complex (CPLX_LENGTH))
+,   c2r_o (fftwf_alloc_real (FFT_LENGTH))
+,   acplx (fftwf_alloc_complex (CPLX_LENGTH))
+,   bcplx (fftwf_alloc_complex (CPLX_LENGTH))
+,   r2c
+    (   fftwf_plan_dft_r2c_1d
+        (   FFT_LENGTH
+        ,   r2c_i
+        ,   r2c_o
+        ,   FFTW_ESTIMATE
+        )
+    )
+,   c2r
+    (   fftwf_plan_dft_c2r_1d
+        (   FFT_LENGTH
+        ,   c2r_i
+        ,   c2r_o
+        ,   FFTW_ESTIMATE
+        )
+    )
+{
+
+}
+
+RayverbFiltering::FastConvolution::~FastConvolution()
+{
+    fftwf_destroy_plan (r2c);
+    fftwf_destroy_plan (c2r);
+    fftwf_free (r2c_i);
+    fftwf_free (r2c_o);
+    fftwf_free (acplx);
+    fftwf_free (bcplx);
+    fftwf_free (c2r_i);
+    fftwf_free (c2r_o);
 }
