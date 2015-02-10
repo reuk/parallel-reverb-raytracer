@@ -63,9 +63,6 @@ to do
     * Aim for coverage of all the library-visible functions first
     * Then for coverage of internal functions if time
 
-* image source stuff
-    * backwards visiblity checks
-
 * check high frequency content - sounds a bit dull
     * might just be my test model
 
@@ -73,5 +70,3 @@ to do
     * build a max patch for auditioning them
 
 * trim output so we don't have to filter as much
-
-* arrays rather than vectors (?)
