@@ -2,13 +2,8 @@ cmake_minimum_required(VERSION 3.0)
 
 project(rayverb)
 
-<<<<<<< HEAD
 set(CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS} "-Wall -std=c++11")
 #set(CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS} "-Weverything -std=c++11")
-=======
-#set(CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS} "-Wall -std=c++11")
-set(CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS} "-Weverything -std=c++11")
->>>>>>> 8cb54b455040bcf3a3d693421d69809f96e3b221
 
 include_directories(
     ${CMAKE_SOURCE_DIR}/include
