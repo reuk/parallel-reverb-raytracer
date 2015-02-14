@@ -31,10 +31,10 @@ typedef cl_float8 VolumeType;
 /// A Triangle contains an offset into an array of Surface, and three offsets
 /// into an array of cl_float3.
 typedef struct  {
-    cl_ulong surface;
-    cl_ulong v0;
-    cl_ulong v1;
-    cl_ulong v2;
+    cl_long surface;
+    cl_long v0;
+    cl_long v1;
+    cl_long v2;
 } _Triangle_unalign;
 
 typedef _Triangle_unalign __attribute__ ((aligned(8))) Triangle;
@@ -246,7 +246,7 @@ public:
     /// time.
     Scene
     (   cl::Context & cl_context
-    ,   unsigned long nreflections
+    ,   long nreflections
     ,   std::vector <Triangle> & triangles
     ,   std::vector <cl_float3> & vertices
     ,   std::vector <Surface> & surfaces
@@ -256,7 +256,7 @@ public:
     /// Init from a 3D model file.
     Scene
     (   cl::Context & cl_context
-    ,   unsigned long nreflections
+    ,   long nreflections
     ,   const std::string & objpath
     ,   const std::string & materialFileName
     ,   bool verbose = false
@@ -299,14 +299,14 @@ public:
 private:
     std::vector <Impulse> hrtf
     (   const cl_float3 & mic_pos
-    ,   unsigned long channel
+    ,   long channel
     ,   const cl_float3 & facing
     ,   const cl_float3 & up
     );
 
-    unsigned long ngroups;
-    const unsigned long nreflections;
-    const unsigned long ntriangles;
+    long ngroups;
+    const long nreflections;
+    const long ntriangles;
 
     cl::Context & cl_context;
 
@@ -327,7 +327,7 @@ private:
 
     Scene
     (   cl::Context & cl_context
-    ,   unsigned long nreflections
+    ,   long nreflections
     ,   SceneData sceneData
     ,   bool verbose = false
     );

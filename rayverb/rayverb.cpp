@@ -60,11 +60,15 @@ vector <vector <float>> flattenImpulses
 
     for (const auto & i : impulse)
     {
-        const auto SAMPLE = round (i.time * samplerate);
-        for (auto j = 0; j != flattened.size(); ++j)
-        {
-            flattened [j] [SAMPLE] += i.volume.s [j];
-        }
+        const long SAMPLE = (long) (i.time * samplerate + 0.5f);
+        flattened [0] [SAMPLE] += i.volume.s [0];
+        flattened [1] [SAMPLE] += i.volume.s [1];
+        flattened [2] [SAMPLE] += i.volume.s [2];
+        flattened [3] [SAMPLE] += i.volume.s [3];
+        flattened [4] [SAMPLE] += i.volume.s [4];
+        flattened [5] [SAMPLE] += i.volume.s [5];
+        flattened [6] [SAMPLE] += i.volume.s [6];
+        flattened [7] [SAMPLE] += i.volume.s [7];
     }
 
     return flattened;
@@ -89,7 +93,7 @@ vector <float> sum (const vector <T> & data)
 vector <float> mixdown (const vector <vector <float>> & data)
 {
     vector <float> ret (data.front().size(), 0);
-    for (auto & i : data)
+    for (auto && i : data)
         transform
         (   ret.begin()
         ,   ret.end()
@@ -123,7 +127,7 @@ vector <vector <float>> process
 
 Scene::Scene
 (   cl::Context & cl_context
-,   unsigned long nreflections
+,   long nreflections
 ,   vector <Triangle> & triangles
 ,   vector <cl_float3> & vertices
 ,   vector <Surface> & surfaces
@@ -159,7 +163,7 @@ Scene::Scene
 ,   cl_image_source_index
     (   cl_context
     ,   CL_MEM_READ_WRITE
-    ,   RAY_GROUP_SIZE * NUM_IMAGE_SOURCE * sizeof (cl_ulong)
+    ,   RAY_GROUP_SIZE * NUM_IMAGE_SOURCE * sizeof (cl_long)
     )
 {
     cl_program = cl::Program (cl_context, KERNEL_STRING, false);
@@ -208,7 +212,7 @@ public:
             (   string ("Type of ") + key + " must be 'Array'"
             );
 
-        constexpr unsigned bands = sizeof (VolumeType) / sizeof (float);
+        constexpr auto bands = sizeof (VolumeType) / sizeof (float);
         if (json [key.c_str()].Size() != bands)
         {
             stringstream ss;
@@ -216,7 +220,7 @@ public:
             throw runtime_error (ss.str());
         }
 
-        for (unsigned i = 0; i != bands; ++i)
+        for (auto i = 0; i != bands; ++i)
             if (! json [key.c_str()] [i].IsNumber())
                 throw runtime_error
                 (   "Elements of material description array must be numerical"
@@ -234,16 +238,16 @@ public:
         checkJsonSurfaceKey (json, specular_string);
         checkJsonSurfaceKey (json, diffuse_string);
 
-        constexpr unsigned bands = sizeof (VolumeType) / sizeof (float);
+        constexpr auto bands = sizeof (VolumeType) / sizeof (float);
 
         Surface ret;
-        for (unsigned i = 0; i != bands; ++i)
+        for (auto i = 0; i != bands; ++i)
         {
             ret.specular.s [i] = json [specular_string.c_str()] [i].GetDouble();
             ret.diffuse.s [i] = json [diffuse_string.c_str()] [i].GetDouble();
         }
 
-        for (unsigned i = 0; i != bands; ++i)
+        for (auto i = 0; i != bands; ++i)
         {
             if (ret.specular.s [i] < 0 || 1 < ret.specular.s [i])
             {
@@ -291,7 +295,7 @@ public:
 
         map <string, int> materialIndices;
         for
-        (   Value::ConstMemberIterator i = document.MemberBegin()
+        (   auto i = document.MemberBegin()
         ;   i != document.MemberEnd()
         ;   ++i
         )
@@ -301,14 +305,14 @@ public:
             materialIndices [name] = surfaces.size() - 1;
         }
 
-        for (unsigned long i = 0; i != scene->mNumMeshes; ++i)
+        for (auto i = 0; i != scene->mNumMeshes; ++i)
         {
             const aiMesh * mesh = scene->mMeshes [i];
 
             aiString name = mesh->mName;
             cerr << "Found mesh: " << name.C_Str() << endl;
 
-            unsigned long mat_index = 0;
+            long mat_index = 0;
             auto nameIterator = materialIndices.find (name.C_Str());
             if (nameIterator != materialIndices.end())
                 mat_index = nameIterator->second;
@@ -317,7 +321,7 @@ public:
 
             vector <cl_float3> meshVertices (mesh->mNumVertices);
 
-            for (unsigned long j = 0; j != mesh->mNumVertices; ++j)
+            for (auto j = 0; j != mesh->mNumVertices; ++j)
             {
                 meshVertices [j] = fromAIVec (mesh->mVertices [j]);
             }
@@ -352,15 +356,15 @@ public:
 
             vector <Triangle> meshTriangles (mesh->mNumFaces);
 
-            for (unsigned long j = 0; j != mesh->mNumFaces; ++j)
+            for (auto j = 0; j != mesh->mNumFaces; ++j)
             {
                 const aiFace face = mesh->mFaces [j];
 
                 meshTriangles [j] = (Triangle) {
                     mat_index,
-                    vertices.size() + face.mIndices [0],
-                    vertices.size() + face.mIndices [1],
-                    vertices.size() + face.mIndices [2]
+                    static_cast <cl_long> (vertices.size() + face.mIndices [0]),
+                    static_cast <cl_long> (vertices.size() + face.mIndices [1]),
+                    static_cast <cl_long> (vertices.size() + face.mIndices [2])
                 };
             }
 
@@ -389,7 +393,7 @@ public:
 
         for (auto && i : vertices)
         {
-            for (int j = 0; j != 3; ++j)
+            for (auto j = 0; j != 3; ++j)
             {
                 mini.s [j] = min (mini.s [j], i.s [j]);
                 maxi.s [j] = max (maxi.s [j], i.s [j]);
@@ -433,9 +437,9 @@ public:
 
     bool validSurfaces()
     {
-        for (const Surface & s : surfaces)
+        for (const auto & s : surfaces)
         {
-            for (int i = 0; i != 3; ++i)
+            for (auto i = 0; i != 3; ++i)
             {
                 if
                 (   s.specular.s [i] < 0 || 1 < s.specular.s [i]
@@ -450,7 +454,7 @@ public:
 
     bool validTriangles()
     {
-        for (const Triangle & t : triangles)
+        for (const auto & t : triangles)
         {
             if
             (   surfaces.size() <= t.surface
@@ -479,7 +483,7 @@ public:
 
 Scene::Scene
 (   cl::Context & cl_context
-,   unsigned long nreflections
+,   long nreflections
 ,   SceneData sceneData
 ,   bool verbose
 )
@@ -495,7 +499,7 @@ Scene::Scene
 
 Scene::Scene
 (   cl::Context & cl_context
-,   unsigned long nreflections
+,   long nreflections
 ,   const string & objpath
 ,   const string & materialFileName
 ,   bool verbose
@@ -518,14 +522,14 @@ void Scene::trace
     <   cl::Buffer
     ,   cl_float3
     ,   cl::Buffer
-    ,   cl_ulong
+    ,   cl_long
     ,   cl::Buffer
     ,   cl_float3
     ,   cl::Buffer
     ,   cl::Buffer
     ,   cl::Buffer
     ,   cl::Buffer
-    ,   cl_ulong
+    ,   cl_long
     > (cl_program, "raytrace");
 
     ngroups = directions.size() / RAY_GROUP_SIZE;
@@ -533,7 +537,7 @@ void Scene::trace
     storedDiffuse.resize (ngroups * RAY_GROUP_SIZE * nreflections);
     storedImage.resize (ngroups * RAY_GROUP_SIZE * NUM_IMAGE_SOURCE);
 
-    map <vector <unsigned long>, Impulse> imageSourceTally;
+    map <vector <long>, Impulse> imageSourceTally;
 
     for (auto i = 0; i != ngroups; ++i)
     {
@@ -552,7 +556,7 @@ void Scene::trace
             (RAY_GROUP_SIZE * NUM_IMAGE_SOURCE, (Impulse) {{{0}}});
         cl::copy (queue, begin (image), end (image), cl_image_source);
 
-        vector <unsigned long> image_source_index
+        vector <long> image_source_index
             (RAY_GROUP_SIZE * NUM_IMAGE_SOURCE, 0);
         cl::copy
         (   queue
@@ -592,7 +596,7 @@ void Scene::trace
         {
             for (auto k = 1; k != NUM_IMAGE_SOURCE + 1; ++k)
             {
-                vector <unsigned long> surfaces
+                vector <long> surfaces
                 (   image_source_index.begin() + j
                 ,   image_source_index.begin() + j + k
                 );
@@ -616,21 +620,12 @@ void Scene::trace
         );
     }
 
-    for (const auto & j : imageSourceTally)
-    {
-        for (const auto & k : j.first)
-        {
-            cout << k << " ";
-        }
-        cout << endl;
-    }
-
     storedImage.resize (imageSourceTally.size());
     transform
     (   begin (imageSourceTally)
     ,   end (imageSourceTally)
     ,   begin (storedImage)
-    ,   [] (const pair <vector <unsigned long>, Impulse> & i) {return i.second;}
+    ,   [] (const pair <vector <long>, Impulse> & i) {return i.second;}
     );
 }
 
@@ -658,14 +653,14 @@ vector <Impulse> Scene::attenuate
     <   cl_float3
     ,   cl::Buffer
     ,   cl::Buffer
-    ,   cl_ulong
+    ,   cl_long
     ,   Speaker
     > (cl_program, "attenuate");
 
     vector <Impulse> retDiffuse (ngroups * RAY_GROUP_SIZE * nreflections);
     vector <Impulse> retImage (ngroups * RAY_GROUP_SIZE * NUM_IMAGE_SOURCE);
 
-    for (int i = 0; i != ngroups; ++i)
+    for (auto i = 0; i != ngroups; ++i)
     {
         cl::copy
         (   queue
@@ -743,7 +738,7 @@ vector <vector <Impulse>> Scene::hrtf
     (   begin (channels)
     ,   end (channels)
     ,   begin (attenuated)
-    ,   [this, mic_pos, facing, up] (unsigned long i)
+    ,   [this, mic_pos, facing, up] (long i)
         {
             return hrtf (mic_pos, i, facing, up);
         }
@@ -753,7 +748,7 @@ vector <vector <Impulse>> Scene::hrtf
 
 vector <Impulse> Scene::hrtf
 (   const cl_float3 & mic_pos
-,   unsigned long channel
+,   long channel
 ,   const cl_float3 & facing
 ,   const cl_float3 & up
 )
@@ -778,17 +773,17 @@ vector <Impulse> Scene::hrtf
     <   cl_float3
     ,   cl::Buffer
     ,   cl::Buffer
-    ,   cl_ulong
+    ,   cl_long
     ,   cl::Buffer
     ,   cl_float3
     ,   cl_float3
-    ,   cl_ulong
+    ,   cl_long
     > (cl_program, "hrtf");
 
     vector <Impulse> retDiffuse (ngroups * RAY_GROUP_SIZE * nreflections);
     vector <Impulse> retImage (ngroups * RAY_GROUP_SIZE * NUM_IMAGE_SOURCE);
 
-    for (int i = 0; i != ngroups; ++i)
+    for (auto i = 0; i != ngroups; ++i)
     {
         cl::copy
         (   queue

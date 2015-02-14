@@ -13,13 +13,13 @@ T sinc (const T & t)
 }
 
 template <typename T>
-vector <T> sincKernel (double cutoff, unsigned long length)
+vector <T> sincKernel (double cutoff, long length)
 {
     if (! (length % 2))
         throw runtime_error ("Length of sinc filter kernel must be odd.");
 
     vector <T> ret (length);
-    for (unsigned long i = 0; i != length; ++i)
+    for (long i = 0; i != length; ++i)
     {
         if (i == ((length - 1) / 2))
             ret [i] = 1;
@@ -30,14 +30,14 @@ vector <T> sincKernel (double cutoff, unsigned long length)
 }
 
 template <typename T>
-vector <T> blackman (unsigned long length)
+vector <T> blackman (long length)
 {
     const double a0 = 7938.0 / 18608.0;
     const double a1 = 9240.0 / 18608.0;
     const double a2 = 1430.0 / 18608.0;
 
     vector <T> ret (length);
-    for (unsigned long i = 0; i != length; ++i)
+    for (long i = 0; i != length; ++i)
     {
         const double offset = i / (length - 1.0);
         ret [i] =
@@ -49,7 +49,7 @@ vector <T> blackman (unsigned long length)
     return ret;
 }
 
-vector <float> lopassKernel (float sr, float cutoff, unsigned long length)
+vector <float> lopassKernel (float sr, float cutoff, long length)
 {
     vector <float> window = blackman <float> (length);
     vector <float> kernel = sincKernel <float> (cutoff / sr, length);
@@ -66,7 +66,7 @@ vector <float> lopassKernel (float sr, float cutoff, unsigned long length)
     return ret;
 }
 
-vector <float> hipassKernel (float sr, float cutoff, unsigned long length)
+vector <float> hipassKernel (float sr, float cutoff, long length)
 {
     vector <float> kernel = lopassKernel (sr, cutoff, length);
     for (auto & i : kernel) i = -i;
@@ -99,7 +99,7 @@ void RayverbFiltering::BandpassBiquadOnepass::biquad
     double z1 = 0;
     double z2 = 0;
 
-    for (auto & i : input)
+    for (auto && i : input)
     {
         double out = i * b0 + z1;
         z1 = i * b1 + z2 - a1 * out;
@@ -190,7 +190,7 @@ void RayverbFiltering::filter
         const vector <float> EDGES
             ({1, 190, 380, 760, 1520, 3040, 6080, 12160, 20000});
 
-        for (unsigned long i = 0; i != channel.size(); ++i)
+        for (long i = 0; i != channel.size(); ++i)
         {
             bp->setParams (EDGES [i], EDGES [i + 1], sr);
             bp->filter (channel [i]);
@@ -199,7 +199,7 @@ void RayverbFiltering::filter
 }
 
 
-RayverbFiltering::FastConvolution::FastConvolution (unsigned long FFT_LENGTH)
+RayverbFiltering::FastConvolution::FastConvolution (long FFT_LENGTH)
 :   FFT_LENGTH (FFT_LENGTH)
 ,   r2c_i (fftwf_alloc_real (FFT_LENGTH))
 ,   r2c_o (fftwf_alloc_complex (CPLX_LENGTH))

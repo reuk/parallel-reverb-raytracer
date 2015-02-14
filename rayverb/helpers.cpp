@@ -15,8 +15,8 @@ using namespace std;
 using namespace rapidjson;
 
 void print_diagnostic
-(   unsigned long nrays
-,   unsigned long nreflections
+(   long nrays
+,   long nreflections
 ,   const vector <Impulse> & impulses
 )
 {
@@ -64,7 +64,7 @@ cl_float3 spherePoint (float z, float theta)
     return (cl_float3) {{ztemp * cosf (theta), ztemp * sinf (theta), z, 0}};
 }
 
-vector <cl_float3> getRandomDirections (unsigned long num)
+vector <cl_float3> getRandomDirections (long num)
 {
     vector <cl_float3> ret (num);
     uniform_real_distribution <float> zDist (-1, 1);
