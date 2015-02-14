@@ -6,8 +6,8 @@
 #ifdef DIAGNOSTIC
 /// Print diagnostic json data to stdout.
 void print_diagnostic
-(   unsigned long nrays
-,   unsigned long nreflections
+(   long nrays
+,   long nreflections
 ,   const std::vector <Impulse> & reflections
 );
 #endif
@@ -25,8 +25,8 @@ cl_float3 spherePoint (float z, float theta);
 //  generate rays as necessary.
 
 /// Get a bunch of unit vectors which can be used as ray starting directions.
-std::vector <cl_float3> getRandomDirections (unsigned long num);
-std::vector <cl_float3> getUniformDirections (unsigned long num);
+std::vector <cl_float3> getRandomDirections (long num);
+std::vector <cl_float3> getUniformDirections (long num);
 
 /// Grab an OpenCL context for GPUs on the system.
 cl::Context getContext();

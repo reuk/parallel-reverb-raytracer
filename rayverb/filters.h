@@ -16,6 +16,8 @@ namespace RayverbFiltering
     class Bandpass
     {
     public:
+        virtual ~Bandpass() {}
+
         /// Given a vector of data, return a bandpassed version of the data.
         virtual void filter (std::vector <float> & data) = 0;
 
@@ -32,7 +34,7 @@ namespace RayverbFiltering
     class FastConvolution
     {
     public:
-        FastConvolution (unsigned long FFT_LENGTH);
+        FastConvolution (long FFT_LENGTH);
         virtual ~FastConvolution();
 
         template <typename T, typename U>
@@ -78,8 +80,8 @@ namespace RayverbFiltering
             memcpy (results, o, sizeof (fftwf_complex) * CPLX_LENGTH);
         }
 
-        const unsigned long FFT_LENGTH;
-        const unsigned long CPLX_LENGTH = FFT_LENGTH / 2 + 1;
+        const long FFT_LENGTH;
+        const long CPLX_LENGTH = FFT_LENGTH / 2 + 1;
 
         float * r2c_i;
         fftwf_complex * r2c_o;
@@ -96,7 +98,7 @@ namespace RayverbFiltering
     class BandpassWindowedSinc: public Bandpass, public FastConvolution
     {
     public:
-        BandpassWindowedSinc (unsigned long inputLength)
+        BandpassWindowedSinc (long inputLength)
         :   FastConvolution (KERNEL_LENGTH + inputLength - 1)
         {
 

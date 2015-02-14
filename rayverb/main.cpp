@@ -30,7 +30,7 @@ void write_aiff
 (   const string & fname
 ,   const vector <vector <float>> & outdata
 ,   float sr
-,   unsigned long bd
+,   long bd
 )
 {
     vector <float> interleaved (outdata.size() * outdata [0].size());
@@ -39,7 +39,7 @@ void write_aiff
         for (int j = 0; j != outdata [i].size(); ++j)
             interleaved [j * outdata.size() + i] = outdata [i] [j];
 
-    map <unsigned long, unsigned long> depthTable
+    map <long, long> depthTable
     {   {16, SF_FORMAT_PCM_16}
     ,   {24, SF_FORMAT_PCM_24}
     };
@@ -70,7 +70,7 @@ void flatten_and_write
 (   const string & fname
 ,   const vector <vector <Impulse>> & impulses
 ,   float sr
-,   unsigned long bd
+,   long bd
 )
 {
     auto flattened = flattenImpulses (impulses, sr);

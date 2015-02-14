@@ -25,15 +25,15 @@ typedef struct {
 } Surface;
 
 typedef struct {
-    unsigned long surface;
-    unsigned long v0;
-    unsigned long v1;
-    unsigned long v2;
+    long surface;
+    long v0;
+    long v1;
+    long v2;
 } Triangle;
 
 typedef struct {
     bool intersects;
-    unsigned long primitive;
+    long primitive;
     float distance;
 } Intersection;
 
@@ -156,19 +156,19 @@ Ray triangle_reflectAt
 Intersection ray_triangle_intersection
 (   Ray * ray
 ,   global Triangle * triangles
-,   unsigned long numtriangles
+,   long numtriangles
 ,   global float3 * vertices
 );
 Intersection ray_triangle_intersection
 (   Ray * ray
 ,   global Triangle * triangles
-,   unsigned long numtriangles
+,   long numtriangles
 ,   global float3 * vertices
 )
 {
     Intersection ret = {false, 0, 0};
 
-    for (unsigned long i = 0; i != numtriangles; ++i)
+    for (long i = 0; i != numtriangles; ++i)
     {
         global Triangle * thisTriangle = triangles + i;
         float distance = triangle_intersection (thisTriangle, vertices, ray);
@@ -189,8 +189,8 @@ Intersection ray_triangle_intersection
 bool anyAbove (VolumeType in, float thresh);
 bool anyAbove (VolumeType in, float thresh)
 {
-    const unsigned long LIMIT = sizeof (VolumeType) / sizeof (float);
-    for (int i = 0; i != LIMIT; ++i)
+    const long LIMIT = sizeof (VolumeType) / sizeof (float);
+    for (long i = 0; i != LIMIT; ++i)
     {
         if (fabs (in [i]) > thresh)
         {
@@ -251,14 +251,14 @@ kernel void raytrace
 (   global float3 * directions
 ,   float3 position
 ,   global Triangle * triangles
-,   unsigned long numtriangles
+,   long numtriangles
 ,   global float3 * vertices
 ,   float3 source
 ,   global Surface * surfaces
 ,   global Impulse * impulses
 ,   global Impulse * image_source
-,   global unsigned long * image_source_index
-,   unsigned long outputOffset
+,   global long * image_source_index
+,   long outputOffset
 )
 {
     size_t i = get_global_id (0);
@@ -286,7 +286,7 @@ kernel void raytrace
     };
     image_source_index [i * NUM_IMAGE_SOURCE] = 0;
 
-    for (unsigned long index = 0; index != outputOffset; ++index)
+    for (long index = 0; index != outputOffset; ++index)
     {
         //  Check for an intersection between the current ray and all the
         //  scene geometry.
@@ -318,7 +318,7 @@ kernel void raytrace
 
             //  For each of the previous triangles that have been intersected,
             //  reflect this triangle in those ones.
-            for (unsigned int k = 0; k != index; ++k)
+            for (long k = 0; k != index; ++k)
             {
                 mirror_verts (&current, prev_primitives + k);
             }
@@ -338,7 +338,7 @@ kernel void raytrace
             //  intersects all of the intermediate triangles.
             Ray toMic = {source, DIR};
             bool intersects = true;
-            for (unsigned long k = 0; k != index + 1; ++k)
+            for (long k = 0; k != index + 1; ++k)
             {
                 const float TO_INTERSECTION = triangle_vert_intersection
                 (   prev_primitives [k].v0
@@ -357,7 +357,7 @@ kernel void raytrace
             if (intersects)
             {
                 float3 prevIntersection = source;
-                for (unsigned long k = 0; k != index + 1; ++k)
+                for (long k = 0; k != index + 1; ++k)
                 {
                     const float TO_INTERSECTION = triangle_vert_intersection
                     (   prev_primitives [k].v0
@@ -492,13 +492,13 @@ kernel void attenuate
 (   float3 mic_pos
 ,   global Impulse * impulsesIn
 ,   global Impulse * impulsesOut
-,   unsigned long outputOffset
+,   long outputOffset
 ,   Speaker speaker
 )
 {
     size_t i = get_global_id (0);
-    const unsigned long END = (i + 1) * outputOffset;
-    for (unsigned long j = i * outputOffset; j != END; ++j)
+    const long END = (i + 1) * outputOffset;
+    for (long j = i * outputOffset; j != END; ++j)
     {
         const float ATTENUATION = speaker_attenuation
         (   &speaker
@@ -553,8 +553,8 @@ VolumeType hrtf_attenuation
 {
     float3 transformed = transform(pointing, up, impulseDirection);
 
-    unsigned long a = degrees(azimuth(transformed));
-    unsigned long e = degrees(elevation(transformed));
+    long a = degrees(azimuth(transformed));
+    long e = degrees(elevation(transformed));
     e = 90 - e;
 
     return hrtfData[a * 180 + e];
@@ -564,11 +564,11 @@ kernel void hrtf
 (   float3 mic_pos
 ,   global Impulse * impulsesIn
 ,   global Impulse * impulsesOut
-,   unsigned long outputOffset
+,   long outputOffset
 ,   global VolumeType * hrtfData
 ,   float3 pointing
 ,   float3 up
-,   unsigned long channel
+,   long channel
 )
 {
     size_t i = get_global_id (0);
@@ -580,8 +580,8 @@ kernel void hrtf
     ,   (float3) {channel == 0 ? -WIDTH : WIDTH, 0, 0}
     ) + mic_pos;
 
-    const unsigned long END = (i + 1) * outputOffset;
-    for (unsigned long j = i * outputOffset; j != END; ++j)
+    const long END = (i + 1) * outputOffset;
+    for (long j = i * outputOffset; j != END; ++j)
     {
         const VolumeType ATTENUATION = hrtf_attenuation
         (   hrtfData
