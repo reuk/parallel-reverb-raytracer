@@ -35,8 +35,8 @@ void write_aiff
 {
     vector <float> interleaved (outdata.size() * outdata [0].size());
 
-    for (int i = 0; i != outdata.size(); ++i)
-        for (int j = 0; j != outdata [i].size(); ++j)
+    for (auto i = 0; i != outdata.size(); ++i)
+        for (auto j = 0; j != outdata [i].size(); ++j)
             interleaved [j * outdata.size() + i] = outdata [i] [j];
 
     map <unsigned long, unsigned long> depthTable

@@ -20,13 +20,13 @@ void print_diagnostic
 ,   const vector <Impulse> & impulses
 )
 {
-    for (int i = 0; i != nrays; ++i)
+    for (auto i = 0; i != nrays; ++i)
     {
         StringBuffer stringBuffer;
         Writer <StringBuffer> writer (stringBuffer);
 
         writer.StartArray();
-        for (int j = 0; j != nreflections; ++j)
+        for (auto j = 0; j != nreflections; ++j)
         {
             Impulse reflection = impulses [i * nreflections + j];
 
@@ -34,14 +34,14 @@ void print_diagnostic
 
             writer.String ("position");
             writer.StartArray();
-            for (int k = 0; k != 3; ++k)
+            for (auto k = 0; k != 3; ++k)
                 writer.Double (reflection.position.s [k]);
             writer.EndArray();
 
             writer.String ("volume");
 //            writer.StartArray();
             float average = 0;
-            for (int k = 0; k != 8; ++k)
+            for (auto k = 0; k != 8; ++k)
                 average += reflection.volume.s [k];
             average /= 8;
             writer.Double (average);

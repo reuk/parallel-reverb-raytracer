@@ -89,7 +89,7 @@ vector <float> sum (const vector <T> & data)
 vector <float> mixdown (const vector <vector <float>> & data)
 {
     vector <float> ret (data.front().size(), 0);
-    for (auto & i : data)
+    for (auto && i : data)
         transform
         (   ret.begin()
         ,   ret.end()
@@ -216,7 +216,7 @@ public:
             throw runtime_error (ss.str());
         }
 
-        for (unsigned i = 0; i != bands; ++i)
+        for (auto i = 0; i != bands; ++i)
             if (! json [key.c_str()] [i].IsNumber())
                 throw runtime_error
                 (   "Elements of material description array must be numerical"
@@ -237,13 +237,13 @@ public:
         constexpr unsigned bands = sizeof (VolumeType) / sizeof (float);
 
         Surface ret;
-        for (unsigned i = 0; i != bands; ++i)
+        for (auto i = 0; i != bands; ++i)
         {
             ret.specular.s [i] = json [specular_string.c_str()] [i].GetDouble();
             ret.diffuse.s [i] = json [diffuse_string.c_str()] [i].GetDouble();
         }
 
-        for (unsigned i = 0; i != bands; ++i)
+        for (auto i = 0; i != bands; ++i)
         {
             if (ret.specular.s [i] < 0 || 1 < ret.specular.s [i])
             {
@@ -291,7 +291,7 @@ public:
 
         map <string, int> materialIndices;
         for
-        (   Value::ConstMemberIterator i = document.MemberBegin()
+        (   auto i = document.MemberBegin()
         ;   i != document.MemberEnd()
         ;   ++i
         )
@@ -301,7 +301,7 @@ public:
             materialIndices [name] = surfaces.size() - 1;
         }
 
-        for (unsigned long i = 0; i != scene->mNumMeshes; ++i)
+        for (auto i = 0; i != scene->mNumMeshes; ++i)
         {
             const aiMesh * mesh = scene->mMeshes [i];
 
@@ -317,7 +317,7 @@ public:
 
             vector <cl_float3> meshVertices (mesh->mNumVertices);
 
-            for (unsigned long j = 0; j != mesh->mNumVertices; ++j)
+            for (auto j = 0; j != mesh->mNumVertices; ++j)
             {
                 meshVertices [j] = fromAIVec (mesh->mVertices [j]);
             }
@@ -352,7 +352,7 @@ public:
 
             vector <Triangle> meshTriangles (mesh->mNumFaces);
 
-            for (unsigned long j = 0; j != mesh->mNumFaces; ++j)
+            for (auto j = 0; j != mesh->mNumFaces; ++j)
             {
                 const aiFace face = mesh->mFaces [j];
 
@@ -433,9 +433,9 @@ public:
 
     bool validSurfaces()
     {
-        for (const Surface & s : surfaces)
+        for (const auto & s : surfaces)
         {
-            for (int i = 0; i != 3; ++i)
+            for (auto i = 0; i != 3; ++i)
             {
                 if
                 (   s.specular.s [i] < 0 || 1 < s.specular.s [i]
@@ -450,7 +450,7 @@ public:
 
     bool validTriangles()
     {
-        for (const Triangle & t : triangles)
+        for (const auto & t : triangles)
         {
             if
             (   surfaces.size() <= t.surface
@@ -616,15 +616,6 @@ void Scene::trace
         );
     }
 
-    for (const auto & j : imageSourceTally)
-    {
-        for (const auto & k : j.first)
-        {
-            cout << k << " ";
-        }
-        cout << endl;
-    }
-
     storedImage.resize (imageSourceTally.size());
     transform
     (   begin (imageSourceTally)
@@ -665,7 +656,7 @@ vector <Impulse> Scene::attenuate
     vector <Impulse> retDiffuse (ngroups * RAY_GROUP_SIZE * nreflections);
     vector <Impulse> retImage (ngroups * RAY_GROUP_SIZE * NUM_IMAGE_SOURCE);
 
-    for (int i = 0; i != ngroups; ++i)
+    for (auto i = 0; i != ngroups; ++i)
     {
         cl::copy
         (   queue
@@ -788,7 +779,7 @@ vector <Impulse> Scene::hrtf
     vector <Impulse> retDiffuse (ngroups * RAY_GROUP_SIZE * nreflections);
     vector <Impulse> retImage (ngroups * RAY_GROUP_SIZE * NUM_IMAGE_SOURCE);
 
-    for (int i = 0; i != ngroups; ++i)
+    for (auto i = 0; i != ngroups; ++i)
     {
         cl::copy
         (   queue

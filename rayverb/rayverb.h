@@ -120,7 +120,7 @@ inline float max_amp (const std::vector <T> & ret)
 template <typename T>
 inline void div (T & ret, float f)
 {
-    for (auto & i : ret)
+    for (auto && i : ret)
         div (i, f);
 }
 
@@ -199,7 +199,7 @@ inline T doNegate (const T & a)
 template <typename T>
 inline void fixPredelay (T & ret, float predelay_seconds)
 {
-    for (auto & i : ret)
+    for (auto && i : ret)
         fixPredelay (i, predelay_seconds);
 }
 

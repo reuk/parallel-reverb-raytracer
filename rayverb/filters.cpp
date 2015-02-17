@@ -19,7 +19,7 @@ vector <T> sincKernel (double cutoff, unsigned long length)
         throw runtime_error ("Length of sinc filter kernel must be odd.");
 
     vector <T> ret (length);
-    for (unsigned long i = 0; i != length; ++i)
+    for (auto i = 0; i != length; ++i)
     {
         if (i == ((length - 1) / 2))
             ret [i] = 1;
@@ -37,7 +37,7 @@ vector <T> blackman (unsigned long length)
     const double a2 = 1430.0 / 18608.0;
 
     vector <T> ret (length);
-    for (unsigned long i = 0; i != length; ++i)
+    for (auto i = 0; i != length; ++i)
     {
         const double offset = i / (length - 1.0);
         ret [i] =
@@ -62,14 +62,14 @@ vector <float> lopassKernel (float sr, float cutoff, unsigned long length)
     ,   [] (float i, float j) { return i * j; }
     );
     float sum = accumulate (begin (ret), end (ret), 0.0);
-    for (auto & i : ret) i /= sum;
+    for (auto && i : ret) i /= sum;
     return ret;
 }
 
 vector <float> hipassKernel (float sr, float cutoff, unsigned long length)
 {
     vector <float> kernel = lopassKernel (sr, cutoff, length);
-    for (auto & i : kernel) i = -i;
+    for (auto && i : kernel) i = -i;
     kernel [(length - 1) / 2] += 1;
     return kernel;
 }
@@ -99,7 +99,7 @@ void RayverbFiltering::BandpassBiquadOnepass::biquad
     double z1 = 0;
     double z2 = 0;
 
-    for (auto & i : input)
+    for (auto && i : input)
     {
         double out = i * b0 + z1;
         z1 = i * b1 + z2 - a1 * out;
@@ -190,7 +190,7 @@ void RayverbFiltering::filter
         const vector <float> EDGES
             ({1, 190, 380, 760, 1520, 3040, 6080, 12160, 20000});
 
-        for (unsigned long i = 0; i != channel.size(); ++i)
+        for (auto i = 0; i != channel.size(); ++i)
         {
             bp->setParams (EDGES [i], EDGES [i + 1], sr);
             bp->filter (channel [i]);
