@@ -24,23 +24,26 @@ def do_trace(source, mic, facing, filename):
             [prog, f.name, join("assets", "room3.dxf"), join("assets", "mat.json"), filename]
         )
 
+def filename(i):
+    return "_".join([str(i), "out.aiff"])
 
 def main():
-    NUM_ANGLES = 10
+    NUM_ANGLES = 1
     RADIUS = 5
+
+    MIC = [0, -75, 20]
 
     for i in range(NUM_ANGLES):
         angle = i * 2 * pi / NUM_ANGLES
 
-        mic = [0, -75, 20]
-        source = [mic[0] + cos(angle) * RADIUS, mic[1], mic[2] + sin(angle) * RADIUS]
-        facing = [j - k for j, k in zip(source, mic)]
+        source = [MIC[0] + cos(angle) * RADIUS, MIC[1], MIC[2] + sin(angle) * RADIUS]
+        facing = [j - k for j, k in zip(source, MIC)]
 
         do_trace(
             source,
-            mic,
+            MIC,
             facing,
-            "_".join([str(i), "out.aiff"])
+            filename(i)
         )
 
 if __name__ == "__main__":
