@@ -228,6 +228,10 @@ inline void fixPredelay
     fixPredelay (ret, length / SPEED_OF_SOUND);
 }
 
+/// Impulses have a tendency to be a bit long.
+/// This function trims the end of the tail off.
+void trimTail (std::vector <std::vector <float>> & audioChannels, float minVol);
+
 /// This is where the magic happens.
 /// Scene is imagined to be an 'initialize-once, use-many' kind of class.
 /// It's initialized with a certain set of geometry, and then it keeps that
@@ -332,7 +336,7 @@ private:
     ,   bool verbose = false
     );
 
-    static const int RAY_GROUP_SIZE = 4096;
+    static const int RAY_GROUP_SIZE = 8192;
     static const std::string KERNEL_STRING;
     static const std::array <std::array <std::array <cl_float8, 180>, 360>, 2> HRTF_DATA;
 

@@ -118,7 +118,31 @@ vector <vector <float>> process
         }
     );
     normalize (ret);
+    trimTail (ret, 0.00001);
     return ret;
+}
+
+void trimTail (vector <vector <float>> & audioChannels, float minVol)
+{
+    auto len = accumulate
+    (   audioChannels.begin()
+    ,   audioChannels.end()
+    ,   0
+    ,   [minVol] (unsigned long current, const vector <float> & i)
+        {
+            return distance
+            (   i.begin()
+            ,   find_if
+                (   i.rbegin()
+                ,   i.rend()
+                ,   [minVol] (float j) {return j >= minVol;}
+                ).base()
+            ) - 1;
+        }
+    );
+
+    for (auto && i : audioChannels)
+        i.resize (len);
 }
 
 Scene::Scene
@@ -531,7 +555,6 @@ void Scene::trace
     ngroups = directions.size() / RAY_GROUP_SIZE;
 
     storedDiffuse.resize (ngroups * RAY_GROUP_SIZE * nreflections);
-    storedImage.resize (ngroups * RAY_GROUP_SIZE * NUM_IMAGE_SOURCE);
 
     map <vector <unsigned long>, Impulse> imageSourceTally;
 
@@ -623,6 +646,12 @@ void Scene::trace
     ,   begin (storedImage)
     ,   [] (const pair <vector <unsigned long>, Impulse> & i) {return i.second;}
     );
+
+    const auto MULTIPLIER = RAY_GROUP_SIZE * NUM_IMAGE_SOURCE;
+    storedImage.resize
+    (   MULTIPLIER * ceil (storedImage.size() / float (MULTIPLIER))
+    ,   (Impulse) {{{0}}}
+    );
 }
 
 vector <vector <Impulse>> Scene::attenuate
@@ -664,13 +693,6 @@ vector <Impulse> Scene::attenuate
         ,   storedDiffuse.begin() + (i + 1) * RAY_GROUP_SIZE * nreflections
         ,   cl_impulses
         );
-        cl::copy
-        (   queue
-        ,   storedImage.begin() + (i + 0) * RAY_GROUP_SIZE * NUM_IMAGE_SOURCE
-        ,   storedImage.begin() + (i + 1) * RAY_GROUP_SIZE * NUM_IMAGE_SOURCE
-        ,   cl_image_source
-        );
-
         attenuate
         (   cl::EnqueueArgs (queue, cl::NDRange (RAY_GROUP_SIZE))
         ,   mic_pos
@@ -685,7 +707,17 @@ vector <Impulse> Scene::attenuate
         ,   retDiffuse.begin() + (i + 0) * RAY_GROUP_SIZE * nreflections
         ,   retDiffuse.begin() + (i + 1) * RAY_GROUP_SIZE * nreflections
         );
+    }
 
+
+    for (auto i = 0; i != storedImage.size() / (RAY_GROUP_SIZE * NUM_IMAGE_SOURCE); ++i)
+    {
+        cl::copy
+        (   queue
+        ,   storedImage.begin() + (i + 0) * RAY_GROUP_SIZE * NUM_IMAGE_SOURCE
+        ,   storedImage.begin() + (i + 1) * RAY_GROUP_SIZE * NUM_IMAGE_SOURCE
+        ,   cl_image_source
+        );
         attenuate
         (   cl::EnqueueArgs (queue, cl::NDRange (RAY_GROUP_SIZE))
         ,   mic_pos
@@ -787,13 +819,6 @@ vector <Impulse> Scene::hrtf
         ,   storedDiffuse.begin() + (i + 1) * RAY_GROUP_SIZE * nreflections
         ,   cl_impulses
         );
-        cl::copy
-        (   queue
-        ,   storedImage.begin() + (i + 0) * RAY_GROUP_SIZE * NUM_IMAGE_SOURCE
-        ,   storedImage.begin() + (i + 1) * RAY_GROUP_SIZE * NUM_IMAGE_SOURCE
-        ,   cl_image_source
-        );
-
         hrtf
         (   cl::EnqueueArgs (queue, cl::NDRange (RAY_GROUP_SIZE))
         ,   mic_pos
@@ -811,7 +836,16 @@ vector <Impulse> Scene::hrtf
         ,   retDiffuse.begin() + (i + 0) * RAY_GROUP_SIZE * nreflections
         ,   retDiffuse.begin() + (i + 1) * RAY_GROUP_SIZE * nreflections
         );
+    }
 
+    for (auto i = 0; i != storedImage.size() / (RAY_GROUP_SIZE * NUM_IMAGE_SOURCE); ++i)
+    {
+        cl::copy
+        (   queue
+        ,   storedImage.begin() + (i + 0) * RAY_GROUP_SIZE * NUM_IMAGE_SOURCE
+        ,   storedImage.begin() + (i + 1) * RAY_GROUP_SIZE * NUM_IMAGE_SOURCE
+        ,   cl_image_source
+        );
         hrtf
         (   cl::EnqueueArgs (queue, cl::NDRange (RAY_GROUP_SIZE))
         ,   mic_pos

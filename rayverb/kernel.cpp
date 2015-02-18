@@ -32,9 +32,9 @@ typedef struct {
 } Triangle;
 
 typedef struct {
-    bool intersects;
     unsigned long primitive;
     float distance;
+    bool intersects;
 } Intersection;
 
 typedef struct {
@@ -166,7 +166,7 @@ Intersection ray_triangle_intersection
 ,   global float3 * vertices
 )
 {
-    Intersection ret = {false, 0, 0};
+    Intersection ret = {0, 0, false};
 
     for (unsigned long i = 0; i != numtriangles; ++i)
     {
@@ -179,7 +179,7 @@ Intersection ray_triangle_intersection
             )
         )
         {
-            ret = (Intersection) {true, i, distance};
+            ret = (Intersection) {i, distance, true};
         }
     }
 
@@ -281,7 +281,7 @@ kernel void raytrace
     const float INIT_DIST = length (INIT_DIFF);
     image_source [i * NUM_IMAGE_SOURCE] = (Impulse)
     {   volume * attenuation_for_distance (INIT_DIST)
-    ,   mic_reflection
+    ,   source
     ,   SECONDS_PER_METER * INIT_DIST
     };
     image_source_index [i * NUM_IMAGE_SOURCE] = 0;
@@ -420,7 +420,7 @@ kernel void raytrace
             {
                 image_source [i * NUM_IMAGE_SOURCE + index + 1] = (Impulse)
                 {   volume * attenuation_for_distance (DIST)
-                ,   mic_reflection
+                ,   position + source - mic_reflection
                 ,   SECONDS_PER_METER * INIT_DIST
                 };
                 image_source_index [i * NUM_IMAGE_SOURCE + index + 1] = closest.primitive + 1;
