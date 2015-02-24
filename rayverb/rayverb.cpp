@@ -145,18 +145,47 @@ void trimTail (vector <vector <float>> & audioChannels, float minVol)
         i.resize (len);
 }
 
+ContextProvider::ContextProvider()
+{
+    vector <cl::Platform> platform;
+    cl::Platform::get (&platform);
+
+    cl_context_properties cps [3] = {
+        CL_CONTEXT_PLATFORM,
+        (cl_context_properties) (platform [0]) (),
+        0
+    };
+
+    cl_context = cl::Context (CL_DEVICE_TYPE_GPU, cps);
+}
+
+KernelLoader::KernelLoader (cl::Context & cl_context)
+:   cl_program (cl_context, KERNEL_STRING, false)
+{
+    vector <cl::Device> device = cl_context.getInfo <CL_CONTEXT_DEVICES>();
+    vector <cl::Device> used_devices (device.end() - 1, device.end());
+
+    cl_program.build (used_devices);
+    cl::Device used_device = used_devices.front();
+
+    cerr
+    <<  cl_program.getBuildInfo <CL_PROGRAM_BUILD_LOG> (used_device)
+    <<  endl;
+
+    queue = cl::CommandQueue (cl_context, used_device);
+}
+
 Scene::Scene
-(   cl::Context & cl_context
-,   unsigned long nreflections
+(   unsigned long nreflections
 ,   vector <Triangle> & triangles
 ,   vector <cl_float3> & vertices
 ,   vector <Surface> & surfaces
 ,   bool verbose
 )
-:   ngroups (0)
+:   KernelLoader (cl_context)
+,   ngroups (0)
 ,   nreflections (nreflections)
 ,   ntriangles (triangles.size())
-,   cl_context (cl_context)
 ,   cl_directions
     (   cl_context
     ,   CL_MEM_READ_WRITE
@@ -185,20 +214,43 @@ Scene::Scene
     ,   CL_MEM_READ_WRITE
     ,   RAY_GROUP_SIZE * NUM_IMAGE_SOURCE * sizeof (cl_ulong)
     )
+,   raytrace_kernel
+    (   cl::make_kernel
+        <   cl::Buffer
+        ,   cl_float3
+        ,   cl::Buffer
+        ,   cl_ulong
+        ,   cl::Buffer
+        ,   cl_float3
+        ,   cl::Buffer
+        ,   cl::Buffer
+        ,   cl::Buffer
+        ,   cl::Buffer
+        ,   cl_ulong
+        > (cl_program, "raytrace")
+    )
+,   attenuate_kernel
+    (   cl::make_kernel
+        <   cl_float3
+        ,   cl::Buffer
+        ,   cl::Buffer
+        ,   cl_ulong
+        ,   Speaker
+        > (cl_program, "attenuate")
+    )
+,   hrtf_kernel
+    (   cl::make_kernel
+        <   cl_float3
+        ,   cl::Buffer
+        ,   cl::Buffer
+        ,   cl_ulong
+        ,   cl::Buffer
+        ,   cl_float3
+        ,   cl_float3
+        ,   cl_ulong
+        > (cl_program, "hrtf")
+    )
 {
-    cl_program = cl::Program (cl_context, KERNEL_STRING, false);
-
-    vector <cl::Device> device = cl_context.getInfo <CL_CONTEXT_DEVICES>();
-    vector <cl::Device> used_devices (device.end() - 1, device.end());
-
-    cl_program.build (used_devices);
-    cl::Device used_device = used_devices.front();
-
-    cerr
-    <<  cl_program.getBuildInfo <CL_PROGRAM_BUILD_LOG> (used_device)
-    <<  endl;
-
-    queue = cl::CommandQueue (cl_context, used_device);
 }
 
 void attemptJsonParse (const string & fname, Document & doc)
@@ -502,14 +554,12 @@ public:
 };
 
 Scene::Scene
-(   cl::Context & cl_context
-,   unsigned long nreflections
+(   unsigned long nreflections
 ,   SceneData sceneData
 ,   bool verbose
 )
 :   Scene
-(   cl_context
-,   nreflections
+(   nreflections
 ,   sceneData.triangles
 ,   sceneData.vertices
 ,   sceneData.surfaces
@@ -518,15 +568,13 @@ Scene::Scene
 }
 
 Scene::Scene
-(   cl::Context & cl_context
-,   unsigned long nreflections
+(   unsigned long nreflections
 ,   const string & objpath
 ,   const string & materialFileName
 ,   bool verbose
 )
 :   Scene
-(   cl_context
-,   nreflections
+(   nreflections
 ,   SceneData (objpath, materialFileName)
 )
 {
@@ -538,20 +586,6 @@ void Scene::trace
 ,   const vector <cl_float3> & directions
 )
 {
-    auto raytrace = cl::make_kernel
-    <   cl::Buffer
-    ,   cl_float3
-    ,   cl::Buffer
-    ,   cl_ulong
-    ,   cl::Buffer
-    ,   cl_float3
-    ,   cl::Buffer
-    ,   cl::Buffer
-    ,   cl::Buffer
-    ,   cl::Buffer
-    ,   cl_ulong
-    > (cl_program, "raytrace");
-
     ngroups = directions.size() / RAY_GROUP_SIZE;
 
     storedDiffuse.resize (ngroups * RAY_GROUP_SIZE * nreflections);
@@ -584,7 +618,7 @@ void Scene::trace
         ,   cl_image_source_index
         );
 
-        raytrace
+        raytrace_kernel
         (   cl::EnqueueArgs (queue, cl::NDRange (RAY_GROUP_SIZE))
         ,   cl_directions
         ,   micpos
@@ -674,14 +708,6 @@ vector <Impulse> Scene::attenuate
 ,   const Speaker & speaker
 )
 {
-    auto attenuate = cl::make_kernel
-    <   cl_float3
-    ,   cl::Buffer
-    ,   cl::Buffer
-    ,   cl_ulong
-    ,   Speaker
-    > (cl_program, "attenuate");
-
     vector <Impulse> retDiffuse (ngroups * RAY_GROUP_SIZE * nreflections);
     vector <Impulse> retImage (ngroups * RAY_GROUP_SIZE * NUM_IMAGE_SOURCE);
 
@@ -693,7 +719,7 @@ vector <Impulse> Scene::attenuate
         ,   storedDiffuse.begin() + (i + 1) * RAY_GROUP_SIZE * nreflections
         ,   cl_impulses
         );
-        attenuate
+        attenuate_kernel
         (   cl::EnqueueArgs (queue, cl::NDRange (RAY_GROUP_SIZE))
         ,   mic_pos
         ,   cl_impulses
@@ -718,7 +744,7 @@ vector <Impulse> Scene::attenuate
         ,   storedImage.begin() + (i + 1) * RAY_GROUP_SIZE * NUM_IMAGE_SOURCE
         ,   cl_image_source
         );
-        attenuate
+        attenuate_kernel
         (   cl::EnqueueArgs (queue, cl::NDRange (RAY_GROUP_SIZE))
         ,   mic_pos
         ,   cl_image_source
@@ -797,17 +823,6 @@ vector <Impulse> Scene::hrtf
     ,   cl_hrtf
     );
 
-    auto hrtf = cl::make_kernel
-    <   cl_float3
-    ,   cl::Buffer
-    ,   cl::Buffer
-    ,   cl_ulong
-    ,   cl::Buffer
-    ,   cl_float3
-    ,   cl_float3
-    ,   cl_ulong
-    > (cl_program, "hrtf");
-
     vector <Impulse> retDiffuse (ngroups * RAY_GROUP_SIZE * nreflections);
     vector <Impulse> retImage (ngroups * RAY_GROUP_SIZE * NUM_IMAGE_SOURCE);
 
@@ -819,7 +834,7 @@ vector <Impulse> Scene::hrtf
         ,   storedDiffuse.begin() + (i + 1) * RAY_GROUP_SIZE * nreflections
         ,   cl_impulses
         );
-        hrtf
+        hrtf_kernel
         (   cl::EnqueueArgs (queue, cl::NDRange (RAY_GROUP_SIZE))
         ,   mic_pos
         ,   cl_impulses
@@ -846,7 +861,7 @@ vector <Impulse> Scene::hrtf
         ,   storedImage.begin() + (i + 1) * RAY_GROUP_SIZE * NUM_IMAGE_SOURCE
         ,   cl_image_source
         );
-        hrtf
+        hrtf_kernel
         (   cl::EnqueueArgs (queue, cl::NDRange (RAY_GROUP_SIZE))
         ,   mic_pos
         ,   cl_image_source

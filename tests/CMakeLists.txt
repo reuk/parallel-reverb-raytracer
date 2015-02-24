@@ -11,7 +11,7 @@ include_directories(
 )
 
 set(name tests)
-set(sources main.cpp)
+set(sources main.cpp ../rayverb/helpers.cpp ../rayverb/rayverb.cpp ../rayverb/kernel.cpp ../rayverb/filters.cpp ../rayverb/hrtf.cpp)
 
 add_definitions(${test_file_flag})
 

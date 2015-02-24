@@ -353,11 +353,8 @@ int main(int argc, const char * argv[])
 
     try
     {
-        cl::Context context = getContext();
-
         Scene scene
-        (   context
-        ,   numImpulses
+        (   numImpulses
         ,   model_filename
         ,   material_filename
         );

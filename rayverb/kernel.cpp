@@ -1,6 +1,6 @@
 #include "rayverb.h"
 
-const std::string Scene::KERNEL_STRING (
+const std::string KernelLoader::KERNEL_STRING (
 #ifdef DIAGNOSTIC
 "#define DIAGNOSTIC\n"
 #endif
@@ -475,7 +475,7 @@ kernel void raytrace
 float3 directionFromPosition (float3 position, float3 mic);
 float3 directionFromPosition (float3 position, float3 mic)
 {
-    return normalize (mic - position);
+    return normalize (position - mic);
 }
 
 float speaker_attenuation (Speaker * speaker, float3 direction);

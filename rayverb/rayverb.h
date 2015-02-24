@@ -232,6 +232,25 @@ inline void fixPredelay
 /// This function trims the end of the tail off.
 void trimTail (std::vector <std::vector <float>> & audioChannels, float minVol);
 
+class ContextProvider
+{
+public:
+    ContextProvider();
+
+    cl::Context cl_context;
+};
+
+class KernelLoader: public ContextProvider
+{
+public:
+    KernelLoader (cl::Context & cl_context);
+
+    cl::Program cl_program;
+    cl::CommandQueue queue;
+    static const std::string KERNEL_STRING;
+};
+
+
 /// This is where the magic happens.
 /// Scene is imagined to be an 'initialize-once, use-many' kind of class.
 /// It's initialized with a certain set of geometry, and then it keeps that
@@ -241,7 +260,7 @@ void trimTail (std::vector <std::vector <float>> & audioChannels, float minVol);
 /// would be reinitialized WHILE a kernel was running, and I'm not sure what
 /// would happen in that case (though I'm sure it would be bad). Unlike copies,
 /// reinitializing the buffer on the host is not queued.
-class Scene
+class Scene: public KernelLoader
 {
 public:
     /// Set up a scene with an openCL context and a bunch of geometry.
@@ -249,8 +268,7 @@ public:
     /// Probably don't have more than one instance of this class alive at a
     /// time.
     Scene
-    (   cl::Context & cl_context
-    ,   unsigned long nreflections
+    (   unsigned long nreflections
     ,   std::vector <Triangle> & triangles
     ,   std::vector <cl_float3> & vertices
     ,   std::vector <Surface> & surfaces
@@ -259,8 +277,7 @@ public:
 
     /// Init from a 3D model file.
     Scene
-    (   cl::Context & cl_context
-    ,   unsigned long nreflections
+    (   unsigned long nreflections
     ,   const std::string & objpath
     ,   const std::string & materialFileName
     ,   bool verbose = false
@@ -312,39 +329,65 @@ private:
     const unsigned long nreflections;
     const unsigned long ntriangles;
 
-    cl::Context & cl_context;
-
     cl::Buffer cl_directions;
     cl::Buffer cl_triangles;
     cl::Buffer cl_vertices;
     cl::Buffer cl_surfaces;
     cl::Buffer cl_impulses;
     cl::Buffer cl_attenuated;
-
     cl::Buffer cl_hrtf;
-
-    cl::Program cl_program;
-
-    cl::CommandQueue queue;
+    cl::Buffer cl_image_source;
+    cl::Buffer cl_image_source_index;
 
     struct SceneData;
 
     Scene
-    (   cl::Context & cl_context
-    ,   unsigned long nreflections
+    (   unsigned long nreflections
     ,   SceneData sceneData
     ,   bool verbose = false
     );
 
     static const int RAY_GROUP_SIZE = 8192;
-    static const std::string KERNEL_STRING;
     static const std::array <std::array <std::array <cl_float8, 180>, 360>, 2> HRTF_DATA;
-
-    cl::Buffer cl_image_source;
-    cl::Buffer cl_image_source_index;
 
     std::vector <Impulse> storedDiffuse;
     std::vector <Impulse> storedImage;
+    decltype
+    (   cl::make_kernel
+        <   cl::Buffer
+        ,   cl_float3
+        ,   cl::Buffer
+        ,   cl_ulong
+        ,   cl::Buffer
+        ,   cl_float3
+        ,   cl::Buffer
+        ,   cl::Buffer
+        ,   cl::Buffer
+        ,   cl::Buffer
+        ,   cl_ulong
+        > (cl_program, "raytrace")
+    ) raytrace_kernel;
+    decltype
+    (   cl::make_kernel
+        <   cl_float3
+        ,   cl::Buffer
+        ,   cl::Buffer
+        ,   cl_ulong
+        ,   Speaker
+        > (cl_program, "attenuate")
+    ) attenuate_kernel;
+    decltype
+    (   cl::make_kernel
+        <   cl_float3
+        ,   cl::Buffer
+        ,   cl::Buffer
+        ,   cl_ulong
+        ,   cl::Buffer
+        ,   cl_float3
+        ,   cl_float3
+        ,   cl_ulong
+        > (cl_program, "hrtf")
+    ) hrtf_kernel;
 };
 
 /// Try to open and parse a json file.

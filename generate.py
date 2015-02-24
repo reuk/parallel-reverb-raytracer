@@ -44,11 +44,14 @@ def main():
     for i in range(NUM_ANGLES):
         angle = i * 2 * pi / NUM_ANGLES
 
-        source = [MIC[0] + cos(angle) * RADIUS, MIC[1], MIC[2] + sin(angle) * RADIUS]
+        source = [MIC[0] + sin(angle) * RADIUS, MIC[1], MIC[2] + cos(angle) * RADIUS]
 
         shape = 0.5
 
-        config_obj = get_speaker_config(source, MIC, [{"direction": [1, 0, 1], "shape": shape}, {"direction": [-1, 0, 1], "shape": shape}])
+        def get_speaker_angle(angle):
+            return {"direction": [sin(angle), 0, cos(angle)], "shape": shape}
+
+        config_obj = get_speaker_config(source, MIC, [get_speaker_angle(-11 * pi / 18), get_speaker_angle(-3 * pi / 18), get_speaker_angle(0), get_speaker_angle(3 * pi / 18), get_speaker_angle(11 * pi / 18)])
         #config_obj = get_hrtf_config(source, MIC, {"facing": [0, 0, 1], "up": [0, 1, 0]})
 
         do_trace(config_obj, filename(i))
