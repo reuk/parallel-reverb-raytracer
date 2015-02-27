@@ -66,7 +66,33 @@ to do
 * check high frequency content - sounds a bit dull
     * might just be my test model
 
-* generate a whole bunch of sample reverbs
-    * build a max patch for auditioning them
+for next week
+-------------
 
-* trim output so we don't have to filter as much
+* more models
+    * make some
+* hundreds of impulses
+    * maybe just stereo ones
+
+* where is the cutoff between rays and sound?
+    * where are balancing points between other constraints?
+* listen in the studios
+
+now
+---
+
+* unit tests for hrtf and speakers, because something's not right still
+
+* diffuse vs image source
+* no direct impulse
+    * cmd line option to select
+
+[x] hipass on output?
+[x] check octave bands / highpass limit
+[x] filtering methods cmd line option
+[x] (no) normalization
+[x] constant volume scaling
+[x] warning if source or mic are outside bounds of model
+[x] constant volume scaling factor in max patch
+[x] max patch with ability to choose impulses from a menu
+[x] no predelay

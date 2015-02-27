@@ -32,14 +32,14 @@ vector <T> sincKernel (double cutoff, unsigned long length)
 template <typename T>
 vector <T> blackman (unsigned long length)
 {
-    const double a0 = 7938.0 / 18608.0;
-    const double a1 = 9240.0 / 18608.0;
-    const double a2 = 1430.0 / 18608.0;
+    const auto a0 = 7938.0 / 18608.0;
+    const auto a1 = 9240.0 / 18608.0;
+    const auto a2 = 1430.0 / 18608.0;
 
     vector <T> ret (length);
     for (auto i = 0; i != length; ++i)
     {
-        const double offset = i / (length - 1.0);
+        const auto offset = i / (length - 1.0);
         ret [i] =
         (   a0
         -   a1 * cos (2 * M_PI * offset)
@@ -51,27 +51,66 @@ vector <T> blackman (unsigned long length)
 
 vector <float> lopassKernel (float sr, float cutoff, unsigned long length)
 {
-    vector <float> window = blackman <float> (length);
-    vector <float> kernel = sincKernel <float> (cutoff / sr, length);
+    auto window = blackman <float> (length);
+    auto kernel = sincKernel <float> (cutoff / sr, length);
     vector <float> ret (length);
     transform
     (   begin (window)
     ,   end (window)
     ,   begin (kernel)
     ,   begin (ret)
-    ,   [] (float i, float j) { return i * j; }
+    ,   [] (auto i, auto j) { return i * j; }
     );
-    float sum = accumulate (begin (ret), end (ret), 0.0);
+    auto sum = accumulate (begin (ret), end (ret), 0.0);
     for (auto && i : ret) i /= sum;
     return ret;
 }
 
 vector <float> hipassKernel (float sr, float cutoff, unsigned long length)
 {
-    vector <float> kernel = lopassKernel (sr, cutoff, length);
+    auto kernel = lopassKernel (sr, cutoff, length);
     for (auto && i : kernel) i = -i;
     kernel [(length - 1) / 2] += 1;
     return kernel;
+}
+
+void RayverbFiltering::Hipass::setParams (float co, float s)
+{
+    cutoff = co;
+    sr = s;
+}
+
+void RayverbFiltering::Bandpass::setParams (float l, float h, float s)
+{
+    lo = l;
+    hi = h;
+    sr = s;
+}
+
+RayverbFiltering::HipassWindowedSinc::HipassWindowedSinc (unsigned long inputLength)
+:   FastConvolution (KERNEL_LENGTH + inputLength - 1)
+{
+
+}
+
+void RayverbFiltering::HipassWindowedSinc::filter (vector <float> & data)
+{
+    data = convolve (kernel, data);
+}
+
+void RayverbFiltering::HipassWindowedSinc::setParams
+(   float co
+,   float s
+)
+{
+    auto i = hipassKernel (s, co, KERNEL_LENGTH);
+    copy (i.begin(), i.end(), kernel.begin());
+}
+
+RayverbFiltering::BandpassWindowedSinc::BandpassWindowedSinc (unsigned long inputLength)
+:   FastConvolution (KERNEL_LENGTH + inputLength - 1)
+{
+
 }
 
 vector <float> RayverbFiltering::BandpassWindowedSinc::bandpassKernel
@@ -80,11 +119,26 @@ vector <float> RayverbFiltering::BandpassWindowedSinc::bandpassKernel
 ,   float hi
 )
 {
-    vector <float> lop = lopassKernel (sr, hi, 1 + KERNEL_LENGTH / 2);
-    vector <float> hip = hipassKernel (sr, lo, 1 + KERNEL_LENGTH / 2);
+    auto lop = lopassKernel (sr, hi, 1 + KERNEL_LENGTH / 2);
+    auto hip = hipassKernel (sr, lo, 1 + KERNEL_LENGTH / 2);
 
     FastConvolution fc (KERNEL_LENGTH);
     return fc.convolve (lop, hip);
+}
+
+void RayverbFiltering::BandpassWindowedSinc::filter (vector <float> & data)
+{
+    data = convolve (kernel, data);
+}
+
+void RayverbFiltering::BandpassWindowedSinc::setParams
+(   float l
+,   float h
+,   float s
+)
+{
+    auto i = bandpassKernel (s, l, h);
+    copy (i.begin(), i.end(), kernel.begin());
 }
 
 void RayverbFiltering::BandpassBiquadOnepass::biquad
@@ -149,21 +203,6 @@ void RayverbFiltering::BandpassBiquadTwopass::filter (vector <float> & data)
     reverse (begin (data), end (data));
 }
 
-void RayverbFiltering::BandpassWindowedSinc::filter (vector <float> & data)
-{
-    data = convolve (kernel, data);
-}
-
-void RayverbFiltering::BandpassWindowedSinc::setParams
-(   float l
-,   float h
-,   float s
-)
-{
-    auto i = bandpassKernel (s, l, h);
-    copy (i.begin(), i.end(), kernel.begin());
-}
-
 void RayverbFiltering::filter
 (   FilterType ft
 ,   vector <vector <vector <float>>> & data
@@ -188,7 +227,7 @@ void RayverbFiltering::filter
     for (auto && channel : data)
     {
         const vector <float> EDGES
-            ({1, 190, 380, 760, 1520, 3040, 6080, 12160, 20000});
+            ({90, 175, 350, 700, 1400, 2800, 5600, 11200, 20000});
 
         for (auto i = 0; i != channel.size(); ++i)
         {

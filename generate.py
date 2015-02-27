@@ -32,29 +32,34 @@ def do_trace(config_obj, filename):
         f.flush()
         call([prog, f.name, join("assets", "room3.dxf"), join("assets", "mat.json"), filename])
 
-def filename(i):
-    return "_".join([str(i), "out.aiff"])
+def filename(i, prefix):
+    return join("responses", "_".join([prefix, str(i), "out.aiff"]))
 
 def main():
-    NUM_ANGLES = 4
-    RADIUS = 5
+    NUM_ANGLES = 8
 
     MIC = [0, -75, 20]
 
-    for i in range(NUM_ANGLES):
-        angle = i * 2 * pi / NUM_ANGLES
+    def write_impulses(radius, prefix):
+        for i in range(NUM_ANGLES):
+            angle = i * 2 * pi / NUM_ANGLES
 
-        source = [MIC[0] + sin(angle) * RADIUS, MIC[1], MIC[2] + cos(angle) * RADIUS]
+            source = [MIC[0] + sin(angle) * radius, MIC[1], MIC[2] + cos(angle) * radius]
 
-        shape = 0.5
+            shape = 0.5
 
-        def get_speaker_angle(angle):
-            return {"direction": [sin(angle), 0, cos(angle)], "shape": shape}
+            def get_speaker_angle(angle):
+                return {"direction": [sin(angle), 0, cos(angle)], "shape": shape}
 
-        config_obj = get_speaker_config(source, MIC, [get_speaker_angle(-11 * pi / 18), get_speaker_angle(-3 * pi / 18), get_speaker_angle(0), get_speaker_angle(3 * pi / 18), get_speaker_angle(11 * pi / 18)])
-        #config_obj = get_hrtf_config(source, MIC, {"facing": [0, 0, 1], "up": [0, 1, 0]})
+            #config_obj = get_speaker_config(source, MIC, [get_speaker_angle(-11 * pi / 18), get_speaker_angle(-3 * pi / 18), get_speaker_angle(0), get_speaker_angle(3 * pi / 18), get_speaker_angle(11 * pi / 18)])
+            config_obj = get_speaker_config(source, MIC, [get_speaker_angle(-3 * pi / 18), get_speaker_angle(3 * pi / 18)])
+            #config_obj = get_hrtf_config(source, MIC, {"facing": [0, 0, 1], "up": [0, 1, 0]})
 
-        do_trace(config_obj, filename(i))
+            do_trace(config_obj, filename(i, prefix))
+
+    write_impulses(5, "near")
+    write_impulses(10, "med")
+    write_impulses(15, "far")
 
 if __name__ == "__main__":
     main()

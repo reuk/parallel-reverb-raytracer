@@ -5,5 +5,9 @@
     "reflections": 128,
     "sample_rate": 44100,
     "bit_depth": 16,
-    "hrtf": {"facing": [5, 75, -5], "up": [0, 1, 0]}
+    "hrtf": {"facing": [5, 75, -5], "up": [0, 1, 0]},
+
+    "filter": "twopass",
+    "hipass": false,
+    "trim_predelay": true
 }

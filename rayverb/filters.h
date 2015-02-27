@@ -12,20 +12,25 @@
 /// filtering.
 namespace RayverbFiltering
 {
-    /// Interface for a plain boring bandpass filter.
-    class Bandpass
+    class Filter
     {
     public:
         /// Given a vector of data, return a bandpassed version of the data.
         virtual void filter (std::vector <float> & data) = 0;
+    };
 
-        virtual void setParams (float l, float h, float s)
-        {
-            lo = l;
-            hi = h;
-            sr = s;
-        }
+    class Hipass: public Filter
+    {
+    public:
+        virtual void setParams (float co, float s);
+        float cutoff, sr;
+    };
 
+    /// Interface for a plain boring bandpass filter.
+    class Bandpass: public Filter
+    {
+    public:
+        virtual void setParams (float l, float h, float s);
         float lo, hi, sr;
     };
 
@@ -92,15 +97,23 @@ namespace RayverbFiltering
         fftwf_plan c2r;
     };
 
+    class HipassWindowedSinc: public Hipass, public FastConvolution
+    {
+    public:
+        HipassWindowedSinc (unsigned long inputLength);
+
+        virtual void filter (std::vector <float> & data);
+        virtual void setParams (float co, float s);
+    private:
+        static const auto KERNEL_LENGTH = 29;
+        std::array <float, KERNEL_LENGTH> kernel;
+    };
+
     /// An interesting windowed-sinc bandpass filter.
     class BandpassWindowedSinc: public Bandpass, public FastConvolution
     {
     public:
-        BandpassWindowedSinc (unsigned long inputLength)
-        :   FastConvolution (KERNEL_LENGTH + inputLength - 1)
-        {
-
-        }
+        BandpassWindowedSinc (unsigned long inputLength);
 
         /// Filter a vector of data.
         virtual void filter (std::vector <float> & data);

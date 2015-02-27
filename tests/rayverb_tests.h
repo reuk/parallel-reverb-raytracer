@@ -7,6 +7,7 @@
 #include "gtest/gtest.h"
 
 #include <vector>
+#include <random>
 
 namespace {
     using namespace std;
@@ -66,6 +67,7 @@ namespace {
                 > (cl_program, "attenuate")
             )
         ,   out (SIZE)
+        ,   dist (0, 100)
         {
             in.push_back (constructImpulse (-10, 0, 0));
             in.push_back (constructImpulse (10, 0, 0));
@@ -121,19 +123,22 @@ namespace {
             ,   Speaker
             > (cl_program, "attenuate")
         ) attenuate;
-        static constexpr cl_float3 mic_pos = {0, 0, 0, 0};
-        static constexpr Speaker speaker0 = {(cl_float3) {0, 0, 1, 0}, 0};
-        static constexpr Speaker speaker1 = {(cl_float3) {0, 0, 1, 0}, 0.5};
-        static constexpr Speaker speaker2 = {(cl_float3) {0, 0, 1, 0}, 1};
+        static constexpr cl_float3 mic_pos = {{0, 0, 0}};
+        static constexpr Speaker speaker0 = {(cl_float3) {{0, 0, 1}}, 0};
+        static constexpr Speaker speaker1 = {(cl_float3) {{0, 0, 1}}, 0.5};
+        static constexpr Speaker speaker2 = {(cl_float3) {{0, 0, 1}}, 1};
         static const auto nreflections = 2;
 
         Impulse constructImpulse (float x, float y, float z)
         {
-            return (Impulse) {(VolumeType) {1, 1, 1, 1, 1, 1, 1, 1}, (cl_float3) {x, y, z, 0}, 1};
+            return (Impulse) {(VolumeType) {{1, 1, 1, 1, 1, 1, 1, 1}}, (cl_float3) {{x, y, z}}, dist (generator)};
         }
 
         vector <Impulse> in;
         vector <Impulse> out;
+
+        default_random_engine generator;
+        uniform_real_distribution <float> dist;
     };
 
     const cl_float3 KernelTest::mic_pos;
@@ -179,5 +184,14 @@ namespace {
         ASSERT_EQ(out [3].volume.s [0], 0);
         ASSERT_EQ(out [4].volume.s [0], -1);
         ASSERT_EQ(out [5].volume.s [0], 1);
+    }
+
+    TEST_F(KernelTest, Timing)
+    {
+        run (speaker0);
+        auto i = in.begin();
+        auto j = out.begin();
+        for (; i != in.end() && j != out.end(); ++i, ++j)
+            ASSERT_EQ(i->time, j->time);
     }
 }

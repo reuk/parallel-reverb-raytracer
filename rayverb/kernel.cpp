@@ -186,21 +186,6 @@ Intersection ray_triangle_intersection
     return ret;
 }
 
-bool anyAbove (VolumeType in, float thresh);
-bool anyAbove (VolumeType in, float thresh)
-{
-    const unsigned long LIMIT = sizeof (VolumeType) / sizeof (float);
-    for (int i = 0; i != LIMIT; ++i)
-    {
-        if (fabs (in [i]) > thresh)
-        {
-            return true;
-        }
-    }
-
-    return false;
-}
-
 VolumeType air_attenuation_for_distance (float distance);
 VolumeType air_attenuation_for_distance (float distance)
 {
@@ -500,15 +485,18 @@ kernel void attenuate
     const unsigned long END = (i + 1) * outputOffset;
     for (unsigned long j = i * outputOffset; j != END; ++j)
     {
-        const float ATTENUATION = speaker_attenuation
-        (   &speaker
-        ,   directionFromPosition (impulsesIn [j].position, mic_pos)
-        );
-        impulsesOut [j] = (Impulse)
-        {   impulsesIn [j].volume * ATTENUATION
-        ,   impulsesIn [j].position
-        ,   impulsesIn [j].time
-        };
+        if (any (impulsesIn [j].volume != 0))
+        {
+            const float ATTENUATION = speaker_attenuation
+            (   &speaker
+            ,   directionFromPosition (impulsesIn [j].position, mic_pos)
+            );
+            impulsesOut [j] = (Impulse)
+            {   impulsesIn [j].volume * ATTENUATION
+            ,   impulsesIn [j].position
+            ,   impulsesIn [j].time
+            };
+        }
     }
 }
 
@@ -583,22 +571,25 @@ kernel void hrtf
     const unsigned long END = (i + 1) * outputOffset;
     for (unsigned long j = i * outputOffset; j != END; ++j)
     {
-        const VolumeType ATTENUATION = hrtf_attenuation
-        (   hrtfData
-        ,   pointing
-        ,   up
-        ,   directionFromPosition (impulsesIn [j].position, mic_pos)
-        );
+        if (any (impulsesIn [j].volume != 0))
+        {
+            const VolumeType ATTENUATION = hrtf_attenuation
+            (   hrtfData
+            ,   pointing
+            ,   up
+            ,   directionFromPosition (impulsesIn [j].position, mic_pos)
+            );
 
-        const float dist0 = distance (impulsesIn [j].position, mic_pos);
-        const float dist1 = distance (impulsesIn [j].position, ear_pos);
-        const float diff = dist1 - dist0;
+            const float dist0 = distance (impulsesIn [j].position, mic_pos);
+            const float dist1 = distance (impulsesIn [j].position, ear_pos);
+            const float diff = dist1 - dist0;
 
-        impulsesOut [j] = (Impulse)
-        {   impulsesIn [j].volume * ATTENUATION
-        ,   impulsesIn [j].position
-        ,   impulsesIn [j].time + diff * SECONDS_PER_METER
-        };
+            impulsesOut [j] = (Impulse)
+            {   impulsesIn [j].volume * ATTENUATION
+            ,   impulsesIn [j].position
+            ,   impulsesIn [j].time + diff * SECONDS_PER_METER
+            };
+        }
     }
 }
 

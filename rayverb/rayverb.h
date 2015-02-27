@@ -13,7 +13,7 @@
 #include <iostream>
 #include <array>
 
-//#define DIAGNOSTIC
+#define DIAGNOSTIC
 
 #define NUM_IMAGE_SOURCE 10
 #define SPEED_OF_SOUND (340.0f)
@@ -85,35 +85,29 @@ std::vector <std::vector <float>> process
 (   RayverbFiltering::FilterType filtertype
 ,   std::vector <std::vector <std::vector <float>>> & data
 ,   float sr
+,   bool do_normalize
+,   bool do_hipass
+,   bool do_trim_tail
+,   float volumme_scale
 );
-
-//  These next few functions are recursive template metaprogramming magic
-//  and I've forgotten how they work since I wrote them but it's REALLY CLEVER
-//  I promise.
 
 /// You can call max_amp on an arbitrarily nested vector and get back the
 /// magnitude of the value with the greatest magnitude in the vector.
 template <typename T>
-inline float max_amp (const std::vector <T> & ret);
-
-template <typename T>
-struct FabsMax: public std::binary_function <float, T, float>
+inline float max_amp (const T & t)
 {
-    inline float operator() (float a, T b) const
-        { return std::max (a, max_amp (b)); }
-};
+    return std::accumulate
+    (   t.begin()
+    ,   t.end()
+    ,   0.0
+    ,   [] (float a, const auto & b) {return std::max (a, max_amp (b));}
+    );
+}
 
 template<>
-struct FabsMax <float>: public std::binary_function <float, float, float>
+inline float max_amp (const float & t)
 {
-    inline float operator() (float a, float b) const
-        { return std::max (a, std::fabs (b)); }
-};
-
-template <typename T>
-inline float max_amp (const std::vector <T> & ret)
-{
-    return std::accumulate (begin (ret), end (ret), 0.0f, FabsMax <T>());
+    return std::fabs (t);
 }
 
 /// Recursively divide by reference.
@@ -130,107 +124,81 @@ inline void div (float & ret, float f)
     ret /= f;
 }
 
+/// Recursively multiply by reference.
+template <typename T>
+inline void mul (T & ret, float f)
+{
+    for (auto && i : ret)
+        mul (i, f);
+}
+
+template<>
+inline void mul (float & ret, float f)
+{
+    ret *= f;
+}
+
 /// Find the largest absolute value in an arbitarily nested vector, then
 /// divide every item in the vector by that value.
 template <typename T>
 inline void normalize (std::vector <T> & ret)
 {
-    div (ret, max_amp (ret));
+    mul (ret, 1.0 / max_amp (ret));
 }
 
-/// Overloads std::plus for cl_float3.
-template<>
-struct std::plus <cl_float3>
-:   public binary_function <cl_float3, cl_float3, cl_float3>
+template <typename T, typename U>
+inline T elementwise (const T & a, const T & b, const U & u)
 {
-    inline cl_float3 operator() (const cl_float3 & a, const cl_float3 & b) const
-    {
-        return (cl_float3)
-        {   {a.s [0] + b.s [0]
-        ,   a.s [1] + b.s [1]
-        ,   a.s [2] + b.s [2]
-        ,   a.s [3] + b.s [3]}
-        };
-    }
-};
-
-/// Overloads std::plus for cl_float8.
-template<>
-struct std::plus <cl_float8>
-:   public binary_function <cl_float8, cl_float8, cl_float8>
-{
-    inline cl_float8 operator() (const cl_float8 & a, const cl_float8 & b) const
-    {
-        constexpr auto LIM = sizeof (cl_float8) / sizeof (float);
-
-        cl_float8 ret;
-        for (auto i = 0; i != LIM; ++i)
-            ret.s [i] = a.s [i] + b.s [i];
-        return ret;
-    }
-};
-
-/// Overloads std::negate for cl_float3.
-template<>
-struct std::negate <cl_float3>
-:   public unary_function <cl_float3, cl_float3>
-{
-    inline cl_float3 operator() (const cl_float3 & a) const
-    {
-        return (cl_float3) {{-a.s [0], -a.s [1], -a.s [2], -a.s [3]}};
-    }
-};
-
-/// Basically std::plus but without having to manually specify type info.
-template <typename T>
-inline T sum (const T & a, const T & b)
-{
-    return std::plus <T>() (a, b);
+    T ret;
+    std::transform (std::begin (a.s), std::end (a.s), std::begin (b.s), std::begin (ret.s), u);
+    return ret;
 }
 
-/// Basically std::negate but without having to manually specify type info.
 template <typename T>
-inline T doNegate (const T & a)
+inline float findPredelay (const T & ret)
 {
-    return std::negate <T>() (a);
+    return accumulate
+    (   ret.begin() + 1
+    ,   ret.end()
+    ,   findPredelay (ret.front())
+    ,   [] (auto a, const auto & b)
+        {
+            auto pd = findPredelay (b);
+            if (a == 0)
+                return pd;
+            if (pd == 0)
+                return a;
+            return std::min (a, pd);
+        }
+    );
 }
 
-/// Subtract a time in seconds from a nested vector of impulses.
+template<>
+inline float findPredelay (const Impulse & i)
+{
+    return i.time;
+}
+
 template <typename T>
-inline void fixPredelay (T & ret, float predelay_seconds)
+inline void fixPredelay (T & ret, float seconds)
 {
     for (auto && i : ret)
-        fixPredelay (i, predelay_seconds);
+        fixPredelay (i, seconds);
 }
 
-/// Subtract a time in seconds from the 'time' field of an impulse.
 template<>
-inline void fixPredelay (Impulse & ret, float predelay_seconds)
+inline void fixPredelay (Impulse & ret, float seconds)
 {
-    ret.time = ret.time > predelay_seconds ? ret.time - predelay_seconds : 0;
+    ret.time = ret.time > seconds ? ret.time - seconds : 0;
 }
 
-/// Calculate the time taken for sound to travel between a source and mic,
-/// then subtract that time from all impulses.
 template <typename T>
-inline void fixPredelay
-(   T & ret
-,   const cl_float3 & micpos
-,   const cl_float3 & source
-)
+inline void fixPredelay (T & ret)
 {
-    const cl_float3 diff = sum (micpos, doNegate (source));
-    const float length = sqrt
-    (   pow (diff.s [0], 2)
-    +   pow (diff.s [1], 2)
-    +   pow (diff.s [2], 2)
-    );
-    fixPredelay (ret, length / SPEED_OF_SOUND);
+    auto predelay = findPredelay (ret);
+    fixPredelay (ret, predelay);
 }
 
-/// Impulses have a tendency to be a bit long.
-/// This function trims the end of the tail off.
-void trimTail (std::vector <std::vector <float>> & audioChannels, float minVol);
 
 class ContextProvider
 {
@@ -272,7 +240,6 @@ public:
     ,   std::vector <Triangle> & triangles
     ,   std::vector <cl_float3> & vertices
     ,   std::vector <Surface> & surfaces
-    ,   bool verbose = false
     );
 
     /// Init from a 3D model file.
@@ -280,7 +247,6 @@ public:
     (   unsigned long nreflections
     ,   const std::string & objpath
     ,   const std::string & materialFileName
-    ,   bool verbose = false
     );
 
     /// Do a raytrace.
@@ -325,6 +291,22 @@ private:
     ,   const cl_float3 & up
     );
 
+    std::vector <Impulse> attenuate
+    (   const cl_float3 & mic_pos
+    ,   const Speaker & speaker
+    ,   const std::vector <Impulse> & impulses
+    ,   const unsigned long jump_size
+    );
+
+    std::vector <Impulse> hrtf
+    (   const cl_float3 & mic_pos
+    ,   unsigned long channel
+    ,   const cl_float3 & facing
+    ,   const cl_float3 & up
+    ,   const std::vector <Impulse> & impulses
+    ,   const unsigned long jump_size
+    );
+
     unsigned long ngroups;
     const unsigned long nreflections;
     const unsigned long ntriangles;
@@ -339,12 +321,17 @@ private:
     cl::Buffer cl_image_source;
     cl::Buffer cl_image_source_index;
 
+    std::pair <cl_float3, cl_float3> bounds;
+
+    static std::pair <cl_float3, cl_float3> getBounds
+    (   const std::vector <cl_float3> & vertices
+    );
+
     struct SceneData;
 
     Scene
     (   unsigned long nreflections
     ,   SceneData sceneData
-    ,   bool verbose = false
     );
 
     static const int RAY_GROUP_SIZE = 8192;

@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.0)
 
 project(tests)
 
-set(CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS} -std=c++11)
+set(CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS} "-Wall -std=c++1y")
 
 include_directories(
     ${CMAKE_SOURCE_DIR}/include
@@ -11,7 +11,7 @@ include_directories(
 )
 
 set(name tests)
-set(sources main.cpp ../rayverb/helpers.cpp ../rayverb/rayverb.cpp ../rayverb/kernel.cpp ../rayverb/filters.cpp ../rayverb/hrtf.cpp)
+set(sources main.cpp)
 
 add_definitions(${test_file_flag})
 
@@ -21,6 +21,6 @@ find_library(opencl_library OpenCL)
 mark_as_advanced(opencl_library)
 set(frameworks ${opencl_library})
 
-set(libraries assimp fftw3f sndfile gtest ${frameworks})
+set(libraries rayverb assimp fftw3f sndfile gtest ${frameworks})
 
 target_link_libraries(${name} ${libraries})

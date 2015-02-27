@@ -1,5 +1,6 @@
 #include "rayverb.h"
 #include "filters.h"
+#include "config.h"
 
 #include "rapidjson/rapidjson.h"
 #include "rapidjson/error/en.h"
@@ -35,7 +36,7 @@ vector <vector <vector <float>>> flattenImpulses
     (   begin (attenuated)
     ,   end (attenuated)
     ,   begin (flattened)
-    ,   [samplerate] (const vector <Impulse> & i)
+    ,   [samplerate] (const auto & i)
         {
             return flattenImpulses (i, samplerate);
         }
@@ -95,30 +96,8 @@ vector <float> mixdown (const vector <vector <float>> & data)
         ,   ret.end()
         ,   i.begin()
         ,   ret.begin()
-        ,   [] (float a, float b) {return a + b;}
+        ,   plus <float>()
         );
-    return ret;
-}
-
-vector <vector <float>> process
-(   RayverbFiltering::FilterType filtertype
-,   vector <vector <vector <float>>> & data
-,   float sr
-)
-{
-    RayverbFiltering::filter (filtertype, data, sr);
-    vector <vector <float>> ret (data.size());
-    transform
-    (   data.begin()
-    ,   data.end()
-    ,   ret.begin()
-    ,   [] (vector <vector <float>> & i)
-        {
-            return mixdown (i);
-        }
-    );
-    normalize (ret);
-    trimTail (ret, 0.00001);
     return ret;
 }
 
@@ -128,21 +107,58 @@ void trimTail (vector <vector <float>> & audioChannels, float minVol)
     (   audioChannels.begin()
     ,   audioChannels.end()
     ,   0
-    ,   [minVol] (unsigned long current, const vector <float> & i)
+    ,   [minVol] (long current, const auto & i)
         {
-            return distance
-            (   i.begin()
-            ,   find_if
-                (   i.rbegin()
-                ,   i.rend()
-                ,   [minVol] (float j) {return j >= minVol;}
-                ).base()
-            ) - 1;
+            return max
+            (   current
+            ,   distance
+                (   i.begin()
+                ,   find_if
+                    (   i.rbegin()
+                    ,   i.rend()
+                    ,   [minVol] (auto j) {return abs (j) >= minVol;}
+                    ).base()
+                ) - 1
+            );
         }
     );
 
     for (auto && i : audioChannels)
         i.resize (len);
+}
+
+vector <vector <float>> process
+(   RayverbFiltering::FilterType filtertype
+,   vector <vector <vector <float>>> & data
+,   float sr
+,   bool do_normalize
+,   bool do_hipass
+,   bool do_trim_tail
+,   float volume_scale
+)
+{
+    RayverbFiltering::filter (filtertype, data, sr);
+    vector <vector <float>> ret (data.size());
+    transform (data.begin(), data.end(), ret.begin(), mixdown);
+
+    if (do_hipass)
+    {
+        RayverbFiltering::HipassWindowedSinc hp (ret.front().size());
+        hp.setParams (10, sr);
+        for (auto && i : ret)
+            hp.filter (i);
+    }
+
+    if (do_normalize)
+        normalize (ret);
+
+    if (volume_scale != 1)
+        mul (ret, volume_scale);
+
+    if (do_trim_tail)
+        trimTail (ret, 0.00001);
+
+    return ret;
 }
 
 ContextProvider::ContextProvider()
@@ -175,12 +191,37 @@ KernelLoader::KernelLoader (cl::Context & cl_context)
     queue = cl::CommandQueue (cl_context, used_device);
 }
 
+pair <cl_float3, cl_float3> Scene::getBounds
+(   const vector <cl_float3> & vertices
+)
+{
+    return pair <cl_float3, cl_float3>
+    (   accumulate
+        (   vertices.begin() + 1
+        ,   vertices.end()
+        ,   vertices.front()
+        ,   [] (const auto & a, const auto & b)
+            {
+                return elementwise (a, b, [] (auto i, auto j) {return min (i, j);});
+            }
+        )
+    ,   accumulate
+        (   vertices.begin() + 1
+        ,   vertices.end()
+        ,   vertices.front()
+        ,   [] (const auto & a, const auto & b)
+            {
+                return elementwise (a, b, [] (auto i, auto j) {return max (i, j);});
+            }
+        )
+    );
+}
+
 Scene::Scene
 (   unsigned long nreflections
 ,   vector <Triangle> & triangles
 ,   vector <cl_float3> & vertices
 ,   vector <Surface> & surfaces
-,   bool verbose
 )
 :   KernelLoader (cl_context)
 ,   ngroups (0)
@@ -214,6 +255,7 @@ Scene::Scene
     ,   CL_MEM_READ_WRITE
     ,   RAY_GROUP_SIZE * NUM_IMAGE_SOURCE * sizeof (cl_ulong)
     )
+,   bounds (getBounds (vertices))
 ,   raytrace_kernel
     (   cl::make_kernel
         <   cl::Buffer
@@ -272,82 +314,6 @@ public:
         populate (objpath, materialFileName);
     }
 
-    void checkJsonSurfaceKey (const Value & json, const string & key)
-    {
-        if (! json.HasMember (key.c_str()))
-            throw runtime_error
-            (   string ("Surface must contain '") + key + "' key"
-            );
-
-        if (! json [key.c_str()].IsArray())
-            throw runtime_error
-            (   string ("Type of ") + key + " must be 'Array'"
-            );
-
-        constexpr unsigned bands = sizeof (VolumeType) / sizeof (float);
-        if (json [key.c_str()].Size() != bands)
-        {
-            stringstream ss;
-            ss << "Length of material description array must be " << bands;
-            throw runtime_error (ss.str());
-        }
-
-        for (auto i = 0; i != bands; ++i)
-            if (! json [key.c_str()] [i].IsNumber())
-                throw runtime_error
-                (   "Elements of material description array must be numerical"
-                );
-    }
-
-    Surface jsonToSurface (const Value & json)
-    {
-        if (! json.IsObject())
-            throw runtime_error ("Surface must be a JSON object");
-
-        string specular_string ("specular");
-        string diffuse_string ("diffuse");
-
-        checkJsonSurfaceKey (json, specular_string);
-        checkJsonSurfaceKey (json, diffuse_string);
-
-        constexpr unsigned bands = sizeof (VolumeType) / sizeof (float);
-
-        Surface ret;
-        for (auto i = 0; i != bands; ++i)
-        {
-            ret.specular.s [i] = json [specular_string.c_str()] [i].GetDouble();
-            ret.diffuse.s [i] = json [diffuse_string.c_str()] [i].GetDouble();
-        }
-
-        for (auto i = 0; i != bands; ++i)
-        {
-            if (ret.specular.s [i] < 0 || 1 < ret.specular.s [i])
-            {
-                stringstream ss;
-                ss
-                <<  "Invalid specular value '"
-                <<  ret.specular.s [i]
-                <<  "' found"
-                <<  endl;
-                ss << "Specular values must be in the range (0, 1)" << endl;
-                throw runtime_error (ss.str());
-            }
-            if (ret.diffuse.s [i] < 0 || 1 < ret.diffuse.s [i])
-            {
-                stringstream ss;
-                ss
-                <<  "Invalid diffuse value '"
-                <<  ret.diffuse.s [i]
-                <<  "' found"
-                <<  endl;
-                ss << "Diffuse values must be in the range (0, 1)" << endl;
-                throw runtime_error (ss.str());
-            }
-        }
-
-        return ret;
-    }
-
     void populate (const aiScene * scene, const string & materialFileName)
     {
         if (! scene)
@@ -373,7 +339,14 @@ public:
         )
         {
             string name = i->name.GetString();
-            surfaces.push_back (jsonToSurface (i->value));
+            Surface surface;
+            JsonGetter <Surface> getter (surface);
+            if (! getter.check (i->value))
+            {
+                throw std::runtime_error ("invalid surface");
+            }
+            getter.get (i->value);
+            surfaces.push_back (surface);
             materialIndices [name] = surfaces.size() - 1;
         }
 
@@ -458,38 +431,6 @@ public:
         <<  triangles.size()
         <<  " triangles"
         <<  endl;
-        cerr << "Model bounds: " << endl;
-
-        cl_float3 mini, maxi;
-        mini = maxi = vertices.front();
-
-        for (auto && i : vertices)
-        {
-            for (int j = 0; j != 3; ++j)
-            {
-                mini.s [j] = min (mini.s [j], i.s [j]);
-                maxi.s [j] = max (maxi.s [j], i.s [j]);
-            }
-        }
-
-        cerr
-        <<  " min ["
-        <<  mini.s [0]
-        <<  ", "
-        <<  mini.s [1]
-        <<  ", "
-        <<  mini.s [2]
-        <<  "]"
-        <<  endl;
-        cerr
-        <<  " max ["
-        <<  maxi.s [0]
-        <<  ", "
-        <<  maxi.s [1]
-        <<  ", "
-        <<  maxi.s [2]
-        <<  "]"
-        <<  endl;
     }
 
     void populate (const string & objpath, const string & materialFileName)
@@ -548,15 +489,14 @@ public:
         return validSurfaces() && validTriangles();
     }
 
-    std::vector <Triangle> triangles;
-    std::vector <cl_float3> vertices;
-    std::vector <Surface> surfaces;
+    vector <Triangle> triangles;
+    vector <cl_float3> vertices;
+    vector <Surface> surfaces;
 };
 
 Scene::Scene
 (   unsigned long nreflections
 ,   SceneData sceneData
-,   bool verbose
 )
 :   Scene
 (   nreflections
@@ -571,7 +511,6 @@ Scene::Scene
 (   unsigned long nreflections
 ,   const string & objpath
 ,   const string & materialFileName
-,   bool verbose
 )
 :   Scene
 (   nreflections
@@ -580,12 +519,58 @@ Scene::Scene
 {
 }
 
+bool inside (const std::pair <cl_float3, cl_float3> & bounds, const cl_float3 & point)
+{
+    for (auto i = 0; i != sizeof (cl_float3) / sizeof (float); ++i)
+        if (! (bounds.first.s [i] <= point.s [i] && point.s [i] <= bounds.second.s [i]))
+            return false;
+    return true;
+}
+
 void Scene::trace
 (   const cl_float3 & micpos
 ,   const cl_float3 & source
 ,   const vector <cl_float3> & directions
 )
 {
+    //  check that mic and source are inside model bounds
+    bool micinside = inside (bounds, micpos);
+    bool srcinside = inside (bounds, source);
+    if (! (micinside && srcinside))
+    {
+        cerr
+        <<  "model bounds: ["
+        <<  bounds.first.s [0] << ", "
+        <<  bounds.first.s [1] << ", "
+        <<  bounds.first.s [2] << "], ["
+        <<  bounds.second.s [0] << ", "
+        <<  bounds.second.s [1] << ", "
+        <<  bounds.second.s [2] << "]"
+        <<  endl;
+
+        if (! micinside)
+        {
+            cerr << "WARNING: microphone position may be outside model" << endl;
+            cerr
+            <<  "mic position: ["
+            <<  micpos.s [0] << ", "
+            <<  micpos.s [1] << ", "
+            <<  micpos.s [2] << "]"
+            <<  endl;
+        }
+
+        if (! srcinside)
+        {
+            cerr << "WARNING: source position may be outside model" << endl;
+            cerr
+            <<  "src position: ["
+            <<  source.s [0] << ", "
+            <<  source.s [1] << ", "
+            <<  source.s [2] << "]"
+            <<  endl;
+        }
+    }
+
     ngroups = directions.size() / RAY_GROUP_SIZE;
 
     storedDiffuse.resize (ngroups * RAY_GROUP_SIZE * nreflections);
@@ -678,7 +663,7 @@ void Scene::trace
     (   begin (imageSourceTally)
     ,   end (imageSourceTally)
     ,   begin (storedImage)
-    ,   [] (const pair <vector <unsigned long>, Impulse> & i) {return i.second;}
+    ,   [] (const auto & i) {return i.second;}
     );
 
     const auto MULTIPLIER = RAY_GROUP_SIZE * NUM_IMAGE_SOURCE;
@@ -698,7 +683,7 @@ vector <vector <Impulse>> Scene::attenuate
     (   begin (speakers)
     ,   end (speakers)
     ,   begin (attenuated)
-    ,   [this, mic_pos] (const Speaker & i) {return attenuate (mic_pos, i);}
+    ,   [this, mic_pos] (const auto & i) {return attenuate (mic_pos, i);}
     );
     return attenuated;
 }
@@ -706,17 +691,21 @@ vector <vector <Impulse>> Scene::attenuate
 vector <Impulse> Scene::attenuate
 (   const cl_float3 & mic_pos
 ,   const Speaker & speaker
+,   const vector <Impulse> & impulses
+,   const unsigned long jump_size
 )
 {
-    vector <Impulse> retDiffuse (ngroups * RAY_GROUP_SIZE * nreflections);
-    vector <Impulse> retImage (ngroups * RAY_GROUP_SIZE * NUM_IMAGE_SOURCE);
+    cout << "image size " << storedImage.size() << endl;
+    cout << "diff size  " << storedDiffuse.size() << endl;
 
-    for (auto i = 0; i != ngroups; ++i)
+    const auto chunk_size = RAY_GROUP_SIZE * jump_size;
+    vector <Impulse> ret (impulses.size());
+    for (auto i = 0; i != impulses.size() / chunk_size; ++i)
     {
         cl::copy
         (   queue
-        ,   storedDiffuse.begin() + (i + 0) * RAY_GROUP_SIZE * nreflections
-        ,   storedDiffuse.begin() + (i + 1) * RAY_GROUP_SIZE * nreflections
+        ,   impulses.begin() + (i + 0) * chunk_size
+        ,   impulses.begin() + (i + 1) * chunk_size
         ,   cl_impulses
         );
         attenuate_kernel
@@ -724,42 +713,26 @@ vector <Impulse> Scene::attenuate
         ,   mic_pos
         ,   cl_impulses
         ,   cl_attenuated
-        ,   nreflections
+        ,   jump_size
         ,   speaker
         );
         cl::copy
         (   queue
         ,   cl_attenuated
-        ,   retDiffuse.begin() + (i + 0) * RAY_GROUP_SIZE * nreflections
-        ,   retDiffuse.begin() + (i + 1) * RAY_GROUP_SIZE * nreflections
+        ,   ret.begin() + (i + 0) * chunk_size
+        ,   ret.begin() + (i + 1) * chunk_size
         );
     }
+    return ret;
+}
 
-
-    for (auto i = 0; i != storedImage.size() / (RAY_GROUP_SIZE * NUM_IMAGE_SOURCE); ++i)
-    {
-        cl::copy
-        (   queue
-        ,   storedImage.begin() + (i + 0) * RAY_GROUP_SIZE * NUM_IMAGE_SOURCE
-        ,   storedImage.begin() + (i + 1) * RAY_GROUP_SIZE * NUM_IMAGE_SOURCE
-        ,   cl_image_source
-        );
-        attenuate_kernel
-        (   cl::EnqueueArgs (queue, cl::NDRange (RAY_GROUP_SIZE))
-        ,   mic_pos
-        ,   cl_image_source
-        ,   cl_attenuated
-        ,   NUM_IMAGE_SOURCE
-        ,   speaker
-        );
-        cl::copy
-        (   queue
-        ,   cl_attenuated
-        ,   retImage.begin() + (i + 0) * RAY_GROUP_SIZE * NUM_IMAGE_SOURCE
-        ,   retImage.begin() + (i + 1) * RAY_GROUP_SIZE * NUM_IMAGE_SOURCE
-        );
-    }
-
+vector <Impulse> Scene::attenuate
+(   const cl_float3 & mic_pos
+,   const Speaker & speaker
+)
+{
+    auto retDiffuse = attenuate (mic_pos, speaker, storedDiffuse, nreflections);
+    auto retImage = attenuate (mic_pos, speaker, storedImage, NUM_IMAGE_SOURCE);
     retDiffuse.insert (retDiffuse.end(), retImage.begin(), retImage.end());
     return retDiffuse;
 }
@@ -792,12 +765,52 @@ vector <vector <Impulse>> Scene::hrtf
     (   begin (channels)
     ,   end (channels)
     ,   begin (attenuated)
-    ,   [this, mic_pos, facing, up] (unsigned long i)
+    ,   [this, mic_pos, facing, up] (auto i)
         {
             return hrtf (mic_pos, i, facing, up);
         }
     );
     return attenuated;
+}
+
+std::vector <Impulse> Scene::hrtf
+(   const cl_float3 & mic_pos
+,   unsigned long channel
+,   const cl_float3 & facing
+,   const cl_float3 & up
+,   const std::vector <Impulse> & impulses
+,   const unsigned long jump_size
+)
+{
+    const auto chunk_size = RAY_GROUP_SIZE * jump_size;
+    vector <Impulse> ret (impulses.size());
+    for (auto i = 0; i != impulses.size() / chunk_size; ++i)
+    {
+        cl::copy
+        (   queue
+        ,   impulses.begin() + (i + 0) * chunk_size
+        ,   impulses.begin() + (i + 1) * chunk_size
+        ,   cl_impulses
+        );
+        hrtf_kernel
+        (   cl::EnqueueArgs (queue, cl::NDRange (RAY_GROUP_SIZE))
+        ,   mic_pos
+        ,   cl_impulses
+        ,   cl_attenuated
+        ,   jump_size
+        ,   cl_hrtf
+        ,   facing
+        ,   up
+        ,   channel
+        );
+        cl::copy
+        (   queue
+        ,   cl_attenuated
+        ,   ret.begin() + (i + 0) * chunk_size
+        ,   ret.begin() + (i + 1) * chunk_size
+        );
+    }
+    return ret;
 }
 
 vector <Impulse> Scene::hrtf
@@ -823,63 +836,8 @@ vector <Impulse> Scene::hrtf
     ,   cl_hrtf
     );
 
-    vector <Impulse> retDiffuse (ngroups * RAY_GROUP_SIZE * nreflections);
-    vector <Impulse> retImage (ngroups * RAY_GROUP_SIZE * NUM_IMAGE_SOURCE);
-
-    for (auto i = 0; i != ngroups; ++i)
-    {
-        cl::copy
-        (   queue
-        ,   storedDiffuse.begin() + (i + 0) * RAY_GROUP_SIZE * nreflections
-        ,   storedDiffuse.begin() + (i + 1) * RAY_GROUP_SIZE * nreflections
-        ,   cl_impulses
-        );
-        hrtf_kernel
-        (   cl::EnqueueArgs (queue, cl::NDRange (RAY_GROUP_SIZE))
-        ,   mic_pos
-        ,   cl_impulses
-        ,   cl_attenuated
-        ,   nreflections
-        ,   cl_hrtf
-        ,   facing
-        ,   up
-        ,   channel
-        );
-        cl::copy
-        (   queue
-        ,   cl_attenuated
-        ,   retDiffuse.begin() + (i + 0) * RAY_GROUP_SIZE * nreflections
-        ,   retDiffuse.begin() + (i + 1) * RAY_GROUP_SIZE * nreflections
-        );
-    }
-
-    for (auto i = 0; i != storedImage.size() / (RAY_GROUP_SIZE * NUM_IMAGE_SOURCE); ++i)
-    {
-        cl::copy
-        (   queue
-        ,   storedImage.begin() + (i + 0) * RAY_GROUP_SIZE * NUM_IMAGE_SOURCE
-        ,   storedImage.begin() + (i + 1) * RAY_GROUP_SIZE * NUM_IMAGE_SOURCE
-        ,   cl_image_source
-        );
-        hrtf_kernel
-        (   cl::EnqueueArgs (queue, cl::NDRange (RAY_GROUP_SIZE))
-        ,   mic_pos
-        ,   cl_image_source
-        ,   cl_attenuated
-        ,   NUM_IMAGE_SOURCE
-        ,   cl_hrtf
-        ,   facing
-        ,   up
-        ,   channel
-        );
-        cl::copy
-        (   queue
-        ,   cl_attenuated
-        ,   retImage.begin() + (i + 0) * RAY_GROUP_SIZE * NUM_IMAGE_SOURCE
-        ,   retImage.begin() + (i + 1) * RAY_GROUP_SIZE * NUM_IMAGE_SOURCE
-        );
-    }
-
+    auto retDiffuse = hrtf (mic_pos, channel, facing, up, storedDiffuse, nreflections);
+    auto retImage = hrtf (mic_pos, channel, facing, up, storedImage, NUM_IMAGE_SOURCE);
     retDiffuse.insert (retDiffuse.end(), retImage.begin(), retImage.end());
     return retDiffuse;
 }
