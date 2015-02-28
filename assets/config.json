@@ -5,10 +5,14 @@
     "reflections": 128,
     "sample_rate": 44100,
     "bit_depth": 16,
-    "speakers": [   {"direction": [1, 0, 0], "shape": 0.5},
-                    {"direction": [0, 1, 0], "shape": 0.5}],
-
+    "attenuation_model":
+    {   "speakers":
+        [   {   "direction": [1, 0, 0], "shape": 0.5}
+        ,   {   "direction": [0, 1, 0], "shape": 0.5}
+        ]
+    },
     "filter": "twopass",
     "hipass": false,
-    "trim_predelay": true
+    "trim_predelay": true,
+    "output_mode": "image_only"
 }

@@ -50,24 +50,11 @@ namespace {
 namespace {
     using namespace std;
 
-    class KernelTest: public KernelLoader, public ::testing::Test
+    class KernelTest: public SpeakerAttenuator, public ::testing::Test
     {
     protected:
         KernelTest()
-        :   KernelLoader (cl_context)
-        ,   cl_in  (cl_context, CL_MEM_READ_WRITE, nreflections * SIZE * sizeof (Impulse))
-        ,   cl_out (cl_context, CL_MEM_READ_WRITE, nreflections * SIZE * sizeof (Impulse))
-        ,   attenuate
-            (   cl::make_kernel
-                <   cl_float3
-                ,   cl::Buffer
-                ,   cl::Buffer
-                ,   cl_ulong
-                ,   Speaker
-                > (cl_program, "attenuate")
-            )
-        ,   out (SIZE)
-        ,   dist (0, 100)
+        :   dist (0, 100)
         {
             in.push_back (constructImpulse (-10, 0, 0));
             in.push_back (constructImpulse (10, 0, 0));
@@ -78,7 +65,7 @@ namespace {
             in.push_back (constructImpulse (0, 0, -10));
             in.push_back (constructImpulse (0, 0, 10));
 
-            in.resize (SIZE, constructImpulse (0, 0, 0));
+            in.resize (1024 * 64, constructImpulse (0, 0, 0));
         }
 
         virtual ~KernelTest()
@@ -88,41 +75,9 @@ namespace {
 
         void run (const Speaker & speaker)
         {
-            cl::copy
-            (   queue
-            ,   in.begin()
-            ,   in.end()
-            ,   cl_in
-            );
-            attenuate
-            (   cl::EnqueueArgs (queue, cl::NDRange (SIZE))
-            ,   mic_pos
-            ,   cl_in
-            ,   cl_out
-            ,   nreflections
-            ,   speaker
-            );
-            cl::copy
-            (   queue
-            ,   cl_out
-            ,   out.begin()
-            ,   out.end()
-            );
+            out = attenuate (RaytracerResults (in, mic_pos), {speaker}).front();
         }
 
-        cl::Buffer cl_in;
-        cl::Buffer cl_out;
-
-        static const auto SIZE = 1024;
-        decltype
-        (   cl::make_kernel
-            <   cl_float3
-            ,   cl::Buffer
-            ,   cl::Buffer
-            ,   cl_ulong
-            ,   Speaker
-            > (cl_program, "attenuate")
-        ) attenuate;
         static constexpr cl_float3 mic_pos = {{0, 0, 0}};
         static constexpr Speaker speaker0 = {(cl_float3) {{0, 0, 1}}, 0};
         static constexpr Speaker speaker1 = {(cl_float3) {{0, 0, 1}}, 0.5};
@@ -149,41 +104,44 @@ namespace {
     TEST_F(KernelTest, AttenuateSpeaker0)
     {
         run (speaker0);
-        for (auto j = 0; j != SIZE * nreflections; ++j)
+        for (const auto & j : out)
             for (auto i = 1; i != sizeof (VolumeType) / sizeof (float); ++i)
-                ASSERT_EQ(out [j].volume.s [0], out [j].volume.s [i]);
-        ASSERT_EQ(out [0].volume.s [0], 1);
-        ASSERT_EQ(out [1].volume.s [0], 1);
-        ASSERT_EQ(out [2].volume.s [0], 1);
-        ASSERT_EQ(out [3].volume.s [0], 1);
-        ASSERT_EQ(out [4].volume.s [0], 1);
-        ASSERT_EQ(out [5].volume.s [0], 1);
+                ASSERT_FLOAT_EQ(j.volume.s [0], j.volume.s [i]);
+
+        ASSERT_FLOAT_EQ(out [0].volume.s [0], 1);
+        ASSERT_FLOAT_EQ(out [1].volume.s [0], 1);
+        ASSERT_FLOAT_EQ(out [2].volume.s [0], 1);
+        ASSERT_FLOAT_EQ(out [3].volume.s [0], 1);
+        ASSERT_FLOAT_EQ(out [4].volume.s [0], 1);
+        ASSERT_FLOAT_EQ(out [5].volume.s [0], 1);
     }
     TEST_F(KernelTest, AttenuateSpeaker1)
     {
         run (speaker1);
-        for (auto j = 0; j != SIZE * nreflections; ++j)
+        for (const auto & j : out)
             for (auto i = 1; i != sizeof (VolumeType) / sizeof (float); ++i)
-                ASSERT_EQ(out [j].volume.s [0], out [j].volume.s [i]);
-        ASSERT_EQ(out [0].volume.s [0], 0.5);
-        ASSERT_EQ(out [1].volume.s [0], 0.5);
-        ASSERT_EQ(out [2].volume.s [0], 0.5);
-        ASSERT_EQ(out [3].volume.s [0], 0.5);
-        ASSERT_EQ(out [4].volume.s [0], 0);
-        ASSERT_EQ(out [5].volume.s [0], 1);
+                ASSERT_FLOAT_EQ(j.volume.s [0], j.volume.s [i]);
+
+        ASSERT_FLOAT_EQ(out [0].volume.s [0], 0.5);
+        ASSERT_FLOAT_EQ(out [1].volume.s [0], 0.5);
+        ASSERT_FLOAT_EQ(out [2].volume.s [0], 0.5);
+        ASSERT_FLOAT_EQ(out [3].volume.s [0], 0.5);
+        ASSERT_FLOAT_EQ(out [4].volume.s [0], 0);
+        ASSERT_FLOAT_EQ(out [5].volume.s [0], 1);
     }
     TEST_F(KernelTest, AttenuateSpeaker2)
     {
         run (speaker2);
-        for (auto j = 0; j != SIZE * nreflections; ++j)
+        for (const auto & j : out)
             for (auto i = 1; i != sizeof (VolumeType) / sizeof (float); ++i)
-                ASSERT_EQ(out [j].volume.s [0], out [j].volume.s [i]);
-        ASSERT_EQ(out [0].volume.s [0], 0);
-        ASSERT_EQ(out [1].volume.s [0], 0);
-        ASSERT_EQ(out [2].volume.s [0], 0);
-        ASSERT_EQ(out [3].volume.s [0], 0);
-        ASSERT_EQ(out [4].volume.s [0], -1);
-        ASSERT_EQ(out [5].volume.s [0], 1);
+                ASSERT_FLOAT_EQ(j.volume.s [0], j.volume.s [i]);
+
+        ASSERT_FLOAT_EQ(out [0].volume.s [0], 0);
+        ASSERT_FLOAT_EQ(out [1].volume.s [0], 0);
+        ASSERT_FLOAT_EQ(out [2].volume.s [0], 0);
+        ASSERT_FLOAT_EQ(out [3].volume.s [0], 0);
+        ASSERT_FLOAT_EQ(out [4].volume.s [0], -1);
+        ASSERT_FLOAT_EQ(out [5].volume.s [0], 1);
     }
 
     TEST_F(KernelTest, Timing)

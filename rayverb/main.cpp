@@ -60,11 +60,6 @@ void write_aiff
     }
 }
 
-enum AttenuationMode
-{   SPEAKER
-,   HRTF
-};
-
 int main(int argc, const char * argv[])
 {
     argc -= 1;
@@ -96,9 +91,9 @@ int main(int argc, const char * argv[])
     auto trim_predelay = false;
     auto remove_direct = false;
     auto trim_tail = true;
+    auto output_mode = ALL;
 
-    HrtfConfig hrtfConfig {{{0, 0, 1}}, {{0, 1, 0}}};
-    vector <Speaker> speakers;
+    AttenuationModel attenuationModel;
 
     Document document;
     attemptJsonParse (config_filename, document);
@@ -107,13 +102,13 @@ int main(int argc, const char * argv[])
     {
         cerr << "Encountered error while parsing config file:" << endl;
         cerr << GetParseError_En (document.GetParseError()) << endl;
-        return 1;
+        exit (1);
     }
 
     if (! document.IsObject())
     {
         cerr << "Rayverb config must be stored in a JSON object" << endl;
-        return 1;
+        exit (1);
     }
 
     ConfigValidator cv;
@@ -125,6 +120,8 @@ int main(int argc, const char * argv[])
     cv.addRequiredValidator ("source_position", source);
     cv.addRequiredValidator ("mic_position", mic);
 
+    cv.addRequiredValidator ("attenuation_model", attenuationModel);
+
     cv.addOptionalValidator ("filter", filter);
     cv.addOptionalValidator ("hipass", hipass);
     cv.addOptionalValidator ("normalize", normalize);
@@ -132,63 +129,83 @@ int main(int argc, const char * argv[])
     cv.addOptionalValidator ("trim_predelay", trim_predelay);
     cv.addOptionalValidator ("remove_direct", remove_direct);
     cv.addOptionalValidator ("trim_tail", trim_tail);
-
-    cv.addOptionalValidator ("speakers", speakers);
-    cv.addOptionalValidator ("hrtf", hrtfConfig);
-
-    cv.run (document);
-
-    auto mode = speakers.empty() ? HRTF : SPEAKER;
-
-    auto directions = getRandomDirections (numRays);
-    vector <vector <Impulse>> attenuated;
-#ifdef DIAGNOSTIC
-    vector <Impulse> raw;
-#endif
+    cv.addOptionalValidator ("output_mode", output_mode);
 
     try
     {
-        Scene scene
+        cv.run (document);
+    }
+    catch (runtime_error error)
+    {
+        cerr << "encountered error reading config file:" << endl;
+        cerr << error.what() << endl;
+        exit (1);
+    }
+
+    auto directions = getRandomDirections (numRays);
+    vector <vector <Impulse>> attenuated;
+    try
+    {
+        Raytracer raytracer
         (   numImpulses
         ,   model_filename
         ,   material_filename
         );
 
-        scene.trace (mic, source, directions);
+        raytracer.raytrace (mic, source, directions, remove_direct);
 
-        switch (mode)
+        RaytracerResults results;
+        switch (output_mode)
         {
-        case SPEAKER:
-            attenuated = scene.attenuate (mic, speakers);
+        case ALL:
+            results = raytracer.getAllRaw();
             break;
-        case HRTF:
-            attenuated = scene.hrtf(mic, hrtfConfig.facing, hrtfConfig.up);
+        case IMAGE_ONLY:
+            results = raytracer.getRawImages();
+            break;
+        case DIFFUSE_ONLY:
+            results = raytracer.getRawDiffuse();
+            break;
+        }
+
+        switch (attenuationModel.mode)
+        {
+        case AttenuationModel::SPEAKER:
+            attenuated = SpeakerAttenuator().attenuate
+            (   results
+            ,   attenuationModel.speakers
+            );
+            break;
+        case AttenuationModel::HRTF:
+            attenuated = HrtfAttenuator().attenuate
+            (   results
+            ,   attenuationModel.hrtf.facing
+            ,   attenuationModel.hrtf.up
+            );
             break;
         default:
             cerr << "This point should never be reached. Aborting" << endl;
-            return 1;
+            exit (1);
         }
-
-#ifdef DIAGNOSTIC
-        raw = scene.getRawDiffuse();
-#endif
     }
     catch (cl::Error error)
     {
         cerr << "encountered opencl error:" << endl;
         cerr << error.what() << endl;
         cerr << error.err() << endl;
+        return 1;
     }
     catch (runtime_error error)
     {
         cerr << "encountered runtime error:" << endl;
         cerr << error.what() << endl;
+        exit (1);
     }
 
     if (attenuated.empty())
     {
         cerr << "No raytrace results returned." << endl;
-        return 1;
+        exit (1);
     }
 
     if (trim_predelay)
@@ -205,11 +222,5 @@ int main(int argc, const char * argv[])
     ,   volumme_scale
     );
     write_aiff (output_filename, processed, sampleRate, bitDepth);
-
-#ifdef DIAGNOSTIC
-    //print_diagnostic (numRays, numImpulses, raw);
-    //print_diagnostic (numRays, NUM_IMAGE_SOURCE, raw);
-#endif
-
     return 0;
 }

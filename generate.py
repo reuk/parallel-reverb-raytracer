@@ -16,12 +16,12 @@ def get_basic_config(source, mic):
 
 def get_hrtf_config(source, mic, hrtf):
     ret = get_basic_config(source, mic)
-    ret["hrtf"] = hrtf
+    ret["attenuation_model"] = {"hrtf": hrtf}
     return ret
 
 def get_speaker_config(source, mic, speakers):
     ret = get_basic_config(source, mic)
-    ret["speakers"] = speakers
+    ret["attenuation_model"] = {"speakers": speakers}
     return ret
 
 def do_trace(config_obj, filename):

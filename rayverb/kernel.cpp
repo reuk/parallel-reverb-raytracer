@@ -477,26 +477,22 @@ kernel void attenuate
 (   float3 mic_pos
 ,   global Impulse * impulsesIn
 ,   global Impulse * impulsesOut
-,   unsigned long outputOffset
 ,   Speaker speaker
 )
 {
     size_t i = get_global_id (0);
-    const unsigned long END = (i + 1) * outputOffset;
-    for (unsigned long j = i * outputOffset; j != END; ++j)
+    global Impulse * thisImpulse = impulsesIn + i;
+    if (any (thisImpulse->volume != 0))
     {
-        if (any (impulsesIn [j].volume != 0))
-        {
-            const float ATTENUATION = speaker_attenuation
-            (   &speaker
-            ,   directionFromPosition (impulsesIn [j].position, mic_pos)
-            );
-            impulsesOut [j] = (Impulse)
-            {   impulsesIn [j].volume * ATTENUATION
-            ,   impulsesIn [j].position
-            ,   impulsesIn [j].time
-            };
-        }
+        const float ATTENUATION = speaker_attenuation
+        (   &speaker
+        ,   directionFromPosition (thisImpulse->position, mic_pos)
+        );
+        impulsesOut [i] = (Impulse)
+        {   thisImpulse->volume * ATTENUATION
+        ,   thisImpulse->position
+        ,   thisImpulse->time
+        };
     }
 }
 
@@ -552,7 +548,6 @@ kernel void hrtf
 (   float3 mic_pos
 ,   global Impulse * impulsesIn
 ,   global Impulse * impulsesOut
-,   unsigned long outputOffset
 ,   global VolumeType * hrtfData
 ,   float3 pointing
 ,   float3 up
@@ -568,28 +563,26 @@ kernel void hrtf
     ,   (float3) {channel == 0 ? -WIDTH : WIDTH, 0, 0}
     ) + mic_pos;
 
-    const unsigned long END = (i + 1) * outputOffset;
-    for (unsigned long j = i * outputOffset; j != END; ++j)
+    global Impulse * thisImpulse = impulsesIn + i;
+
+    if (any (thisImpulse->volume != 0))
     {
-        if (any (impulsesIn [j].volume != 0))
-        {
-            const VolumeType ATTENUATION = hrtf_attenuation
-            (   hrtfData
-            ,   pointing
-            ,   up
-            ,   directionFromPosition (impulsesIn [j].position, mic_pos)
-            );
+        const VolumeType ATTENUATION = hrtf_attenuation
+        (   hrtfData
+        ,   pointing
+        ,   up
+        ,   directionFromPosition (impulsesIn [i].position, mic_pos)
+        );
 
-            const float dist0 = distance (impulsesIn [j].position, mic_pos);
-            const float dist1 = distance (impulsesIn [j].position, ear_pos);
-            const float diff = dist1 - dist0;
+        const float dist0 = distance (thisImpulse->position, mic_pos);
+        const float dist1 = distance (thisImpulse->position, ear_pos);
+        const float diff = dist1 - dist0;
 
-            impulsesOut [j] = (Impulse)
-            {   impulsesIn [j].volume * ATTENUATION
-            ,   impulsesIn [j].position
-            ,   impulsesIn [j].time + diff * SECONDS_PER_METER
-            };
-        }
+        impulsesOut [i] = (Impulse)
+        {   thisImpulse->volume * ATTENUATION
+        ,   thisImpulse->position
+        ,   thisImpulse->time + diff * SECONDS_PER_METER
+        };
     }
 }
 

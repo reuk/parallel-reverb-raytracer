@@ -175,7 +175,7 @@ ContextProvider::ContextProvider()
     cl_context = cl::Context (CL_DEVICE_TYPE_GPU, cps);
 }
 
-KernelLoader::KernelLoader (cl::Context & cl_context)
+KernelLoader::KernelLoader()
 :   cl_program (cl_context, KERNEL_STRING, false)
 {
     vector <cl::Device> device = cl_context.getInfo <CL_CONTEXT_DEVICES>();
@@ -191,7 +191,7 @@ KernelLoader::KernelLoader (cl::Context & cl_context)
     queue = cl::CommandQueue (cl_context, used_device);
 }
 
-pair <cl_float3, cl_float3> Scene::getBounds
+pair <cl_float3, cl_float3> getBounds
 (   const vector <cl_float3> & vertices
 )
 {
@@ -217,14 +217,21 @@ pair <cl_float3, cl_float3> Scene::getBounds
     );
 }
 
-Scene::Scene
+bool inside (const pair <cl_float3, cl_float3> & bounds, const cl_float3 & point)
+{
+    for (auto i = 0; i != sizeof (cl_float3) / sizeof (float); ++i)
+        if (! (bounds.first.s [i] <= point.s [i] && point.s [i] <= bounds.second.s [i]))
+            return false;
+    return true;
+}
+
+Raytracer::Raytracer
 (   unsigned long nreflections
 ,   vector <Triangle> & triangles
 ,   vector <cl_float3> & vertices
 ,   vector <Surface> & surfaces
 )
-:   KernelLoader (cl_context)
-,   ngroups (0)
+:   ngroups (0)
 ,   nreflections (nreflections)
 ,   ntriangles (triangles.size())
 ,   cl_directions
@@ -236,11 +243,6 @@ Scene::Scene
 ,   cl_vertices   (cl_context, begin (vertices),   end (vertices),   false)
 ,   cl_surfaces   (cl_context, begin (surfaces),   end (surfaces),   false)
 ,   cl_impulses
-    (   cl_context
-    ,   CL_MEM_READ_WRITE
-    ,   RAY_GROUP_SIZE * nreflections * sizeof (Impulse)
-    )
-,   cl_attenuated
     (   cl_context
     ,   CL_MEM_READ_WRITE
     ,   RAY_GROUP_SIZE * nreflections * sizeof (Impulse)
@@ -271,42 +273,10 @@ Scene::Scene
         ,   cl_ulong
         > (cl_program, "raytrace")
     )
-,   attenuate_kernel
-    (   cl::make_kernel
-        <   cl_float3
-        ,   cl::Buffer
-        ,   cl::Buffer
-        ,   cl_ulong
-        ,   Speaker
-        > (cl_program, "attenuate")
-    )
-,   hrtf_kernel
-    (   cl::make_kernel
-        <   cl_float3
-        ,   cl::Buffer
-        ,   cl::Buffer
-        ,   cl_ulong
-        ,   cl::Buffer
-        ,   cl_float3
-        ,   cl_float3
-        ,   cl_ulong
-        > (cl_program, "hrtf")
-    )
 {
 }
 
-void attemptJsonParse (const string & fname, Document & doc)
-{
-    ifstream in (fname);
-    string file
-    (   (istreambuf_iterator <char> (in))
-    ,   istreambuf_iterator <char>()
-    );
-
-    doc.Parse(file.c_str());
-}
-
-struct Scene::SceneData
+struct Raytracer::SceneData
 {
 public:
     SceneData (const string & objpath, const string & materialFileName)
@@ -343,7 +313,7 @@ public:
             JsonGetter <Surface> getter (surface);
             if (! getter.check (i->value))
             {
-                throw std::runtime_error ("invalid surface");
+                throw runtime_error ("invalid surface");
             }
             getter.get (i->value);
             surfaces.push_back (surface);
@@ -494,11 +464,23 @@ public:
     vector <Surface> surfaces;
 };
 
-Scene::Scene
+Raytracer::Raytracer
+(   unsigned long nreflections
+,   const string & objpath
+,   const string & materialFileName
+)
+:   Raytracer
+(   nreflections
+,   SceneData (objpath, materialFileName)
+)
+{
+}
+
+Raytracer::Raytracer
 (   unsigned long nreflections
 ,   SceneData sceneData
 )
-:   Scene
+:   Raytracer
 (   nreflections
 ,   sceneData.triangles
 ,   sceneData.vertices
@@ -507,32 +489,15 @@ Scene::Scene
 {
 }
 
-Scene::Scene
-(   unsigned long nreflections
-,   const string & objpath
-,   const string & materialFileName
-)
-:   Scene
-(   nreflections
-,   SceneData (objpath, materialFileName)
-)
-{
-}
-
-bool inside (const std::pair <cl_float3, cl_float3> & bounds, const cl_float3 & point)
-{
-    for (auto i = 0; i != sizeof (cl_float3) / sizeof (float); ++i)
-        if (! (bounds.first.s [i] <= point.s [i] && point.s [i] <= bounds.second.s [i]))
-            return false;
-    return true;
-}
-
-void Scene::trace
+void Raytracer::raytrace
 (   const cl_float3 & micpos
 ,   const cl_float3 & source
 ,   const vector <cl_float3> & directions
+,   bool remove_direct
 )
 {
+    storedMicpos = micpos;
+
     //  check that mic and source are inside model bounds
     bool micinside = inside (bounds, micpos);
     bool srcinside = inside (bounds, source);
@@ -658,6 +623,9 @@ void Scene::trace
         );
     }
 
+    if (remove_direct)
+        imageSourceTally.erase ({0});
+
     storedImage.resize (imageSourceTally.size());
     transform
     (   begin (imageSourceTally)
@@ -665,16 +633,126 @@ void Scene::trace
     ,   begin (storedImage)
     ,   [] (const auto & i) {return i.second;}
     );
-
-    const auto MULTIPLIER = RAY_GROUP_SIZE * NUM_IMAGE_SOURCE;
-    storedImage.resize
-    (   MULTIPLIER * ceil (storedImage.size() / float (MULTIPLIER))
-    ,   (Impulse) {{{0}}}
-    );
 }
 
-vector <vector <Impulse>> Scene::attenuate
+RaytracerResults Raytracer::getRawDiffuse()
+{
+    return RaytracerResults (storedDiffuse, storedMicpos);
+}
+
+RaytracerResults Raytracer::getRawImages()
+{
+    return RaytracerResults (storedImage, storedMicpos);
+}
+
+RaytracerResults Raytracer::getAllRaw()
+{
+    auto ret = storedDiffuse;
+    ret.insert (ret.end(), storedImage.begin(), storedImage.end());
+    return RaytracerResults (ret, storedMicpos);
+}
+
+HrtfAttenuator::HrtfAttenuator()
+:   cl_hrtf
+    (   cl_context
+    ,   CL_MEM_READ_WRITE
+    ,   sizeof (VolumeType) * 360 * 180
+    )
+,   attenuate_kernel
+    (   cl::make_kernel
+        <   cl_float3
+        ,   cl::Buffer
+        ,   cl::Buffer
+        ,   cl::Buffer
+        ,   cl_float3
+        ,   cl_float3
+        ,   cl_ulong
+        > (cl_program, "hrtf")
+    )
+{
+
+}
+
+vector <vector <Impulse>> HrtfAttenuator::attenuate
+(   const RaytracerResults & results
+,   const cl_float3 & facing
+,   const cl_float3 & up
+)
+{
+    auto channels = {0, 1};
+    vector <vector <Impulse>> attenuated (channels.size());
+    transform
+    (   begin (channels)
+    ,   end (channels)
+    ,   begin (attenuated)
+    ,   [this, &results, facing, up] (auto i)
+        {
+            return attenuate (results.mic, i, facing, up, results.impulses);
+        }
+    );
+    return attenuated;
+}
+
+vector <Impulse> HrtfAttenuator::attenuate
 (   const cl_float3 & mic_pos
+,   unsigned long channel
+,   const cl_float3 & facing
+,   const cl_float3 & up
+,   const vector <Impulse> & impulses
+)
+{
+    vector <VolumeType> hrtfChannelData (360 * 180);
+    auto offset = 0;
+    for (const auto & i : HRTF_DATA [channel])
+    {
+        copy (begin (i), end (i), hrtfChannelData.begin() + offset);
+        offset += i.size();
+    }
+
+    cl::copy (queue, begin (hrtfChannelData), end (hrtfChannelData), cl_hrtf);
+
+    cl_in = cl::Buffer
+    (   cl_context
+    ,   CL_MEM_READ_WRITE
+    ,   impulses.size() * sizeof (Impulse)
+    );
+    cl_out = cl::Buffer
+    (   cl_context
+    ,   CL_MEM_READ_WRITE
+    ,   impulses.size() * sizeof (Impulse)
+    );
+
+    cl::copy (queue, impulses.begin(), impulses.end(), cl_in);
+    attenuate_kernel
+    (   cl::EnqueueArgs (queue, cl::NDRange (impulses.size()))
+    ,   mic_pos
+    ,   cl_in
+    ,   cl_out
+    ,   cl_hrtf
+    ,   facing
+    ,   up
+    ,   channel
+    );
+    vector <Impulse> ret (impulses.size());
+    cl::copy (queue, cl_out, ret.begin(), ret.end());
+    return ret;
+}
+
+SpeakerAttenuator::SpeakerAttenuator()
+:   attenuate_kernel
+    (   cl::make_kernel
+        <   cl_float3
+        ,   cl::Buffer
+        ,   cl::Buffer
+        ,   Speaker
+        > (cl_program, "attenuate")
+    )
+{
+
+}
+
+vector <vector <Impulse>> SpeakerAttenuator::attenuate
+(   const RaytracerResults & results
 ,   const vector <Speaker> & speakers
 )
 {
@@ -683,161 +761,52 @@ vector <vector <Impulse>> Scene::attenuate
     (   begin (speakers)
     ,   end (speakers)
     ,   begin (attenuated)
-    ,   [this, mic_pos] (const auto & i) {return attenuate (mic_pos, i);}
-    );
-    return attenuated;
-}
-
-vector <Impulse> Scene::attenuate
-(   const cl_float3 & mic_pos
-,   const Speaker & speaker
-,   const vector <Impulse> & impulses
-,   const unsigned long jump_size
-)
-{
-    cout << "image size " << storedImage.size() << endl;
-    cout << "diff size  " << storedDiffuse.size() << endl;
-
-    const auto chunk_size = RAY_GROUP_SIZE * jump_size;
-    vector <Impulse> ret (impulses.size());
-    for (auto i = 0; i != impulses.size() / chunk_size; ++i)
-    {
-        cl::copy
-        (   queue
-        ,   impulses.begin() + (i + 0) * chunk_size
-        ,   impulses.begin() + (i + 1) * chunk_size
-        ,   cl_impulses
-        );
-        attenuate_kernel
-        (   cl::EnqueueArgs (queue, cl::NDRange (RAY_GROUP_SIZE))
-        ,   mic_pos
-        ,   cl_impulses
-        ,   cl_attenuated
-        ,   jump_size
-        ,   speaker
-        );
-        cl::copy
-        (   queue
-        ,   cl_attenuated
-        ,   ret.begin() + (i + 0) * chunk_size
-        ,   ret.begin() + (i + 1) * chunk_size
-        );
-    }
-    return ret;
-}
-
-vector <Impulse> Scene::attenuate
-(   const cl_float3 & mic_pos
-,   const Speaker & speaker
-)
-{
-    auto retDiffuse = attenuate (mic_pos, speaker, storedDiffuse, nreflections);
-    auto retImage = attenuate (mic_pos, speaker, storedImage, NUM_IMAGE_SOURCE);
-    retDiffuse.insert (retDiffuse.end(), retImage.begin(), retImage.end());
-    return retDiffuse;
-}
-
-vector <Impulse> Scene::getRawDiffuse()
-{
-    return storedDiffuse;
-}
-
-vector <Impulse> Scene::getRawImages()
-{
-    return storedImage;
-}
-
-vector <vector <Impulse>> Scene::hrtf
-(   const cl_float3 & mic_pos
-,   const cl_float3 & facing
-,   const cl_float3 & up
-)
-{
-    cl_hrtf = cl::Buffer
-    (   cl_context
-    ,   CL_MEM_READ_WRITE
-    ,   sizeof (VolumeType) * 360 * 180
-    );
-
-    auto channels = {0, 1};
-    vector <vector <Impulse>> attenuated (channels.size());
-    transform
-    (   begin (channels)
-    ,   end (channels)
-    ,   begin (attenuated)
-    ,   [this, mic_pos, facing, up] (auto i)
+    ,   [this, &results] (const auto & i)
         {
-            return hrtf (mic_pos, i, facing, up);
+            return attenuate (results.mic, i, results.impulses);
         }
     );
     return attenuated;
 }
 
-std::vector <Impulse> Scene::hrtf
+vector <Impulse> SpeakerAttenuator::attenuate
 (   const cl_float3 & mic_pos
-,   unsigned long channel
-,   const cl_float3 & facing
-,   const cl_float3 & up
-,   const std::vector <Impulse> & impulses
-,   const unsigned long jump_size
+,   const Speaker & speaker
+,   const vector <Impulse> & impulses
 )
 {
-    const auto chunk_size = RAY_GROUP_SIZE * jump_size;
+    cl_in = cl::Buffer
+    (   cl_context
+    ,   CL_MEM_READ_WRITE
+    ,   impulses.size() * sizeof (Impulse)
+    );
+    cl_out = cl::Buffer
+    (   cl_context
+    ,   CL_MEM_READ_WRITE
+    ,   impulses.size() * sizeof (Impulse)
+    );
+
+    cl::copy (queue, impulses.begin(), impulses.end(), cl_in);
+    attenuate_kernel
+    (   cl::EnqueueArgs (queue, cl::NDRange (impulses.size()))
+    ,   mic_pos
+    ,   cl_in
+    ,   cl_out
+    ,   speaker
+    );
     vector <Impulse> ret (impulses.size());
-    for (auto i = 0; i != impulses.size() / chunk_size; ++i)
-    {
-        cl::copy
-        (   queue
-        ,   impulses.begin() + (i + 0) * chunk_size
-        ,   impulses.begin() + (i + 1) * chunk_size
-        ,   cl_impulses
-        );
-        hrtf_kernel
-        (   cl::EnqueueArgs (queue, cl::NDRange (RAY_GROUP_SIZE))
-        ,   mic_pos
-        ,   cl_impulses
-        ,   cl_attenuated
-        ,   jump_size
-        ,   cl_hrtf
-        ,   facing
-        ,   up
-        ,   channel
-        );
-        cl::copy
-        (   queue
-        ,   cl_attenuated
-        ,   ret.begin() + (i + 0) * chunk_size
-        ,   ret.begin() + (i + 1) * chunk_size
-        );
-    }
+    cl::copy (queue, cl_out, ret.begin(), ret.end());
     return ret;
 }
 
-vector <Impulse> Scene::hrtf
-(   const cl_float3 & mic_pos
-,   unsigned long channel
-,   const cl_float3 & facing
-,   const cl_float3 & up
-)
+void attemptJsonParse (const string & fname, Document & doc)
 {
-    vector <VolumeType> hrtfChannelData (360 * 180);
-
-    auto offset = 0;
-    for (auto && i : HRTF_DATA [channel])
-    {
-        copy (begin (i), end (i), hrtfChannelData.begin() + offset);
-        offset += i.size();
-    }
-
-    cl::copy
-    (   queue
-    ,   begin (hrtfChannelData)
-    ,   end (hrtfChannelData)
-    ,   cl_hrtf
+    ifstream in (fname);
+    string file
+    (   (istreambuf_iterator <char> (in))
+    ,   istreambuf_iterator <char>()
     );
 
-    auto retDiffuse = hrtf (mic_pos, channel, facing, up, storedDiffuse, nreflections);
-    auto retImage = hrtf (mic_pos, channel, facing, up, storedImage, NUM_IMAGE_SOURCE);
-    retDiffuse.insert (retDiffuse.end(), retImage.begin(), retImage.end());
-    return retDiffuse;
+    doc.Parse(file.c_str());
 }
+

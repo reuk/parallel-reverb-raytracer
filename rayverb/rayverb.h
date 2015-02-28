@@ -211,102 +211,58 @@ public:
 class KernelLoader: public ContextProvider
 {
 public:
-    KernelLoader (cl::Context & cl_context);
+    KernelLoader();
 
     cl::Program cl_program;
     cl::CommandQueue queue;
     static const std::string KERNEL_STRING;
 };
 
+struct RaytracerResults
+{
+    RaytracerResults() {}
+    RaytracerResults (const std::vector <Impulse> impulses, const cl_float3 & c)
+    :   impulses (impulses)
+    ,   mic (c)
+    {}
 
-/// This is where the magic happens.
-/// Scene is imagined to be an 'initialize-once, use-many' kind of class.
-/// It's initialized with a certain set of geometry, and then it keeps that
-/// geometry throughout its lifespan.
-///
-/// If I were to allow the geometry to be updated, there's a chance the buffers
-/// would be reinitialized WHILE a kernel was running, and I'm not sure what
-/// would happen in that case (though I'm sure it would be bad). Unlike copies,
-/// reinitializing the buffer on the host is not queued.
-class Scene: public KernelLoader
+    std::vector <Impulse> impulses;
+    cl_float3 mic;
+};
+
+class Raytracer: public KernelLoader
 {
 public:
-    /// Set up a scene with an openCL context and a bunch of geometry.
-    /// This reserves a whole bunch of space on the GPU.
-    /// Probably don't have more than one instance of this class alive at a
-    /// time.
-    Scene
+    Raytracer
     (   unsigned long nreflections
     ,   std::vector <Triangle> & triangles
     ,   std::vector <cl_float3> & vertices
     ,   std::vector <Surface> & surfaces
     );
 
-    /// Init from a 3D model file.
-    Scene
+    Raytracer
     (   unsigned long nreflections
     ,   const std::string & objpath
     ,   const std::string & materialFileName
     );
 
-    /// Do a raytrace.
-    /// Results are stored internally.
-    /// To get stuff out, call attenuate or hrtf.
-    void trace
+    void raytrace
     (   const cl_float3 & micpos
     ,   const cl_float3 & source
     ,   const std::vector <cl_float3> & directions
+    ,   bool remove_direct
     );
 
-    /// Get raw, unprocessed diffuse impulses from raytrace.
-    std::vector <Impulse> getRawDiffuse();
+    /// Get raw, unprocessed diffuse impulses.
+    RaytracerResults getRawDiffuse();
 
-    /// Get raw, unprocessed image-source impulses from raytrace.
-    std::vector <Impulse> getRawImages();
+    /// Get raw, unprocessed image-source impulses.
+    RaytracerResults getRawImages();
 
-    /// Get attenuated impulses for a particular speaker.
-    std::vector <Impulse> attenuate
-    (   const cl_float3 & mic_pos
-    ,   const Speaker & speaker
-    );
-
-    /// Get attenuated impulses for a vector of speakers.
-    std::vector <std::vector <Impulse>>  attenuate
-    (   const cl_float3 & mic_pos
-    ,   const std::vector <Speaker> & speakers
-    );
-
-    /// Get attenuated impulses for two channels of hrtf.
-    std::vector <std::vector <Impulse>> hrtf
-    (   const cl_float3 & mic_pos
-    ,   const cl_float3 & facing
-    ,   const cl_float3 & up
-    );
+    /// Get all raw, unprocessed impulses.
+    RaytracerResults getAllRaw();
 
 private:
-    std::vector <Impulse> hrtf
-    (   const cl_float3 & mic_pos
-    ,   unsigned long channel
-    ,   const cl_float3 & facing
-    ,   const cl_float3 & up
-    );
-
-    std::vector <Impulse> attenuate
-    (   const cl_float3 & mic_pos
-    ,   const Speaker & speaker
-    ,   const std::vector <Impulse> & impulses
-    ,   const unsigned long jump_size
-    );
-
-    std::vector <Impulse> hrtf
-    (   const cl_float3 & mic_pos
-    ,   unsigned long channel
-    ,   const cl_float3 & facing
-    ,   const cl_float3 & up
-    ,   const std::vector <Impulse> & impulses
-    ,   const unsigned long jump_size
-    );
-
     unsigned long ngroups;
     const unsigned long nreflections;
     const unsigned long ntriangles;
@@ -316,29 +272,22 @@ private:
     cl::Buffer cl_vertices;
     cl::Buffer cl_surfaces;
     cl::Buffer cl_impulses;
-    cl::Buffer cl_attenuated;
-    cl::Buffer cl_hrtf;
     cl::Buffer cl_image_source;
     cl::Buffer cl_image_source_index;
 
     std::pair <cl_float3, cl_float3> bounds;
 
-    static std::pair <cl_float3, cl_float3> getBounds
-    (   const std::vector <cl_float3> & vertices
-    );
+    cl_float3 storedMicpos;
 
     struct SceneData;
 
-    Scene
+    Raytracer
     (   unsigned long nreflections
     ,   SceneData sceneData
     );
 
     static const int RAY_GROUP_SIZE = 8192;
-    static const std::array <std::array <std::array <cl_float8, 180>, 360>, 2> HRTF_DATA;
 
-    std::vector <Impulse> storedDiffuse;
-    std::vector <Impulse> storedImage;
     decltype
     (   cl::make_kernel
         <   cl::Buffer
@@ -354,27 +303,73 @@ private:
         ,   cl_ulong
         > (cl_program, "raytrace")
     ) raytrace_kernel;
+
+    std::vector <Impulse> storedDiffuse;
+    std::vector <Impulse> storedImage;
+};
+
+struct Attenuator: public KernelLoader
+{
+    cl::Buffer cl_in;
+    cl::Buffer cl_out;
+};
+
+class HrtfAttenuator: public Attenuator
+{
+public:
+    HrtfAttenuator();
+    std::vector <std::vector <Impulse>> attenuate
+    (   const RaytracerResults & results
+    ,   const cl_float3 & facing
+    ,   const cl_float3 & up
+    );
+private:
+    std::vector <Impulse> attenuate
+    (   const cl_float3 & mic_pos
+    ,   unsigned long channel
+    ,   const cl_float3 & facing
+    ,   const cl_float3 & up
+    ,   const std::vector <Impulse> & impulses
+    );
+
+    cl::Buffer cl_hrtf;
+
+    static const std::array <std::array <std::array <cl_float8, 180>, 360>, 2> HRTF_DATA;
     decltype
     (   cl::make_kernel
         <   cl_float3
         ,   cl::Buffer
         ,   cl::Buffer
-        ,   cl_ulong
-        ,   Speaker
-        > (cl_program, "attenuate")
-    ) attenuate_kernel;
-    decltype
-    (   cl::make_kernel
-        <   cl_float3
-        ,   cl::Buffer
-        ,   cl::Buffer
-        ,   cl_ulong
         ,   cl::Buffer
         ,   cl_float3
         ,   cl_float3
         ,   cl_ulong
         > (cl_program, "hrtf")
-    ) hrtf_kernel;
+    ) attenuate_kernel;
+};
+
+class SpeakerAttenuator: public Attenuator
+{
+public:
+    SpeakerAttenuator();
+    std::vector <std::vector <Impulse>> attenuate
+    (   const RaytracerResults & results
+    ,   const std::vector <Speaker> & speakers
+    );
+private:
+    std::vector <Impulse> attenuate
+    (   const cl_float3 & mic_pos
+    ,   const Speaker & speaker
+    ,   const std::vector <Impulse> & impulses
+    );
+    decltype
+    (   cl::make_kernel
+        <   cl_float3
+        ,   cl::Buffer
+        ,   cl::Buffer
+        ,   Speaker
+        > (cl_program, "attenuate")
+    ) attenuate_kernel;
 };
 
 /// Try to open and parse a json file.

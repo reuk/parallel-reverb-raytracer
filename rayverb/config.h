@@ -9,10 +9,27 @@
 #include <stdexcept>
 #include <map>
 
+enum OutputMode
+{   ALL
+,   IMAGE_ONLY
+,   DIFFUSE_ONLY
+};
+
 struct HrtfConfig
 {
     cl_float3 facing;
     cl_float3 up;
+};
+
+struct AttenuationModel
+{
+    enum Mode
+    {   SPEAKER
+    ,   HRTF
+    };
+    Mode mode;
+    HrtfConfig hrtf;
+    std::vector <Speaker> speakers;
 };
 
 struct JsonValidatorBase
@@ -237,17 +254,12 @@ struct JsonGetter<Surface>
     Surface & t;
 };
 
-template<>
-struct JsonGetter<RayverbFiltering::FilterType>
+template <typename T>
+struct JsonEnumGetter
 {
-    JsonGetter (RayverbFiltering::FilterType & t)
+    JsonEnumGetter (T & t, const std::map <std::string, T> & m)
     :   t (t)
-    ,   stringkeys
-        (   {   {"sinc", RayverbFiltering::FILTER_TYPE_WINDOWED_SINC}
-            ,   {"onepass", RayverbFiltering::FILTER_TYPE_BIQUAD_ONEPASS}
-            ,   {"twopass", RayverbFiltering::FILTER_TYPE_BIQUAD_TWOPASS}
-            }
-        )
+    ,   stringkeys (m)
     {}
     virtual bool check (const rapidjson::Value & value) const
     {
@@ -255,7 +267,7 @@ struct JsonGetter<RayverbFiltering::FilterType>
         (   any_of
             (   stringkeys.begin()
             ,   stringkeys.end()
-            ,   [&value] (const std::pair <std::string, RayverbFiltering::FilterType> & i)
+            ,   [&value] (const std::pair <std::string, T> & i)
                 {
                     return i.first == value.GetString();
                 }
@@ -266,8 +278,36 @@ struct JsonGetter<RayverbFiltering::FilterType>
     {
         t = stringkeys.at (value.GetString());
     }
-    RayverbFiltering::FilterType & t;
-    const std::map <std::string, RayverbFiltering::FilterType> stringkeys;
+    T & t;
+    const std::map <std::string, T> stringkeys;
+};
+
+template<>
+struct JsonGetter<RayverbFiltering::FilterType>: public JsonEnumGetter <RayverbFiltering::FilterType>
+{
+    JsonGetter (RayverbFiltering::FilterType & t)
+    :   JsonEnumGetter
+        (   t
+        ,   {   {"sinc",    RayverbFiltering::FILTER_TYPE_WINDOWED_SINC}
+            ,   {"onepass", RayverbFiltering::FILTER_TYPE_BIQUAD_ONEPASS}
+            ,   {"twopass", RayverbFiltering::FILTER_TYPE_BIQUAD_TWOPASS}
+            }
+        )
+    {}
+};
+
+template<>
+struct JsonGetter<OutputMode>: public JsonEnumGetter <OutputMode>
+{
+    JsonGetter (OutputMode & t)
+    :   JsonEnumGetter
+        (   t
+        ,   {   {"all",             ALL}
+            ,   {"image_only",      IMAGE_ONLY}
+            ,   {"diffuse_only",    DIFFUSE_ONLY}
+            }
+        )
+    {}
 };
 
 template<>
@@ -346,6 +386,49 @@ struct JsonGetter<std::vector <T>>
         }
     }
     std::vector <T> & t;
+};
+
+template<>
+struct JsonGetter<AttenuationModel>
+{
+    JsonGetter (AttenuationModel & t)
+    :   t (t)
+    ,   keys
+        (   {   {AttenuationModel::SPEAKER, "speakers"}
+            ,   {AttenuationModel::HRTF, "hrtf"}
+            }
+        )
+    {}
+    virtual bool check (const rapidjson::Value & value) const
+    {
+        return value.IsObject() && 1 == std::count_if
+        (   keys.begin()
+        ,   keys.end()
+        ,   [&value] (const auto & i)
+            {
+                return value.HasMember (i.second.c_str());
+            }
+        );
+    }
+
+    virtual void get (const rapidjson::Value & value) const
+    {
+        for (const auto & i : keys)
+            if (value.HasMember (i.second.c_str()))
+                t.mode = i.first;
+
+        ConfigValidator cv;
+
+        if (value.HasMember (keys.at (AttenuationModel::SPEAKER).c_str()))
+            cv.addRequiredValidator (keys.at (AttenuationModel::SPEAKER).c_str(), t.speakers);
+
+        if (value.HasMember (keys.at (AttenuationModel::HRTF).c_str()))
+            cv.addRequiredValidator (keys.at (AttenuationModel::HRTF).c_str(), t.hrtf);
+
+        cv.run (value);
+    }
+    AttenuationModel & t;
+    std::map <AttenuationModel::Mode, std::string> keys;
 };
 
 template <typename T, typename U>

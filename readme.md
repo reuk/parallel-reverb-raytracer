@@ -7,9 +7,11 @@ lighting techniques. Uses OpenCL for IMMENSE SPEED.
 build notes
 -----------
 
-Only tested on Mac OS X Mavericks and Yosemite.
+Only tested on Mac OS X Yosemite.
 
-You'll need CMake to build.
+Mostly C++11, but uses generic lambda parameters from C++1y, so you'll need a
+fairly modern C++ compiler to build.
+You'll also need CMake to build.
 
 You also need the following libraries installed in a standard location (probably
 /usr/local/lib, /usr/local/include) so that CMake can find and link them:
@@ -73,7 +75,6 @@ for next week
     * make some
 * hundreds of impulses
     * maybe just stereo ones
-
 * where is the cutoff between rays and sound?
     * where are balancing points between other constraints?
 * listen in the studios
@@ -83,10 +84,9 @@ now
 
 * unit tests for hrtf and speakers, because something's not right still
 
-* diffuse vs image source
-* no direct impulse
-    * cmd line option to select
-
+[x] diffuse vs image source
+[x] no direct impulse
+[x] make sure all exceptions have catchers
 [x] hipass on output?
 [x] check octave bands / highpass limit
 [x] filtering methods cmd line option
