@@ -513,7 +513,7 @@ float3 transform (float3 pointing, float3 up, float3 d)
 float azimuth (float3 d);
 float azimuth (float3 d)
 {
-    return atan2(d.z, d.x);
+    return atan2(d.x, d.z);
 }
 
 float elevation (float3 d);
@@ -538,6 +538,7 @@ VolumeType hrtf_attenuation
     float3 transformed = transform(pointing, up, impulseDirection);
 
     unsigned long a = degrees(azimuth(transformed));
+    a += 180;
     unsigned long e = degrees(elevation(transformed));
     e = 90 - e;
 

@@ -82,8 +82,6 @@ for next week
 now
 ---
 
-* unit tests for hrtf and speakers, because something's not right still
-
 [x] diffuse vs image source
 [x] no direct impulse
 [x] make sure all exceptions have catchers

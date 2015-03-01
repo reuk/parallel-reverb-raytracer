@@ -11,7 +11,7 @@ include_directories(
 )
 
 set(name tests)
-set(sources main.cpp)
+set(sources hrtf_tests.cpp hrtf.cpp main.cpp)
 
 add_definitions(${test_file_flag})
 

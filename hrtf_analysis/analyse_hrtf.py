@@ -25,25 +25,22 @@ def decode_filename(fname):
 
     return radius, azimuth, elevation
 
-def write_file(data, outfile):
-    out = """
-    #include "rayverb.h"
-    //  [channel][azimuth][elevation]
-    const std::array <std::array <std::array <VolumeType, 180>, 360>, 2> Scene::HRTF_DATA =
-    """
+def write_file(header_string, data, outfile):
+    out = header_string
 
     l = []
     r = []
 
     def get_entry(a, e):
         for i in data:
-            if i[0]["a"] == a and i[0]["e"] == e:
+            if i[0]["a"] == (a % 360) and i[0]["e"] == e:
+            #if i[0]["a"] == a and i[0]["e"] == e:
                 return i[1]
         return [[0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]]
 
     for a in range(360):
-        a_min = 0
-        a_max = 360
+        a_min = 0.0
+        a_max = 360.0
 
         for i in data:
             tmp = i[0]["a"]
@@ -57,8 +54,8 @@ def write_file(data, outfile):
         r_for_angle = []
 
         for e in range(180):
-            e_min = 0
-            e_max = 180
+            e_min = 0.0
+            e_max = 180.0
 
             for i in data:
                 tmp = i[0]["e"]
@@ -68,13 +65,13 @@ def write_file(data, outfile):
                 if e_min < tmp <= e:
                     e_min = tmp
 
-            c_0_0 = get_entry (a_min, e_min)
-            c_1_0 = get_entry (a_max, e_min)
-            c_0_1 = get_entry (a_min, e_max)
-            c_1_1 = get_entry (a_max, e_max)
+            c_0_0 = get_entry(a_min, e_min)
+            c_1_0 = get_entry(a_max, e_min)
+            c_0_1 = get_entry(a_min, e_max)
+            c_1_1 = get_entry(a_max, e_max)
 
-            a_ratio = (a - a_min) / (a_max - a_min)
-            e_ratio = (e - e_min) / (e_max - e_min)
+            a_ratio = (a - a_min) / float(a_max - a_min)
+            e_ratio = (e - e_min) / float(e_max - e_min)
 
             def chan_dat(chan):
                 a_0 = [i + (j - i) * a_ratio for i, j in zip(c_0_0[chan], c_1_0[chan])]
@@ -170,7 +167,12 @@ def main():
     # with open(args.outfile, 'w') as f:
     #     json.dump(out, f)
 
-    write_file(out, join("rayverb", "hrtf.cpp"))
+    header_string = """
+    #include "rayverb.h"
+    //  [channel][azimuth][elevation]
+    const std::array <std::array <std::array <VolumeType, 180>, 360>, 2> HrtfAttenuator::HRTF_DATA =
+    """
+    write_file(header_string, out, join("rayverb", "hrtf.cpp"))
 
 if __name__ == "__main__":
     main()

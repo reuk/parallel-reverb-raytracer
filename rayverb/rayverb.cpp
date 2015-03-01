@@ -675,6 +675,14 @@ HrtfAttenuator::HrtfAttenuator()
 
 vector <vector <Impulse>> HrtfAttenuator::attenuate
 (   const RaytracerResults & results
+,   const HrtfConfig & config
+)
+{
+    return attenuate (results, config.facing, config.up);
+}
+
+vector <vector <Impulse>> HrtfAttenuator::attenuate
+(   const RaytracerResults & results
 ,   const cl_float3 & facing
 ,   const cl_float3 & up
 )
@@ -703,7 +711,7 @@ vector <Impulse> HrtfAttenuator::attenuate
 {
     vector <VolumeType> hrtfChannelData (360 * 180);
     auto offset = 0;
-    for (const auto & i : HRTF_DATA [channel])
+    for (const auto & i : getHrtfData() [channel])
     {
         copy (begin (i), end (i), hrtfChannelData.begin() + offset);
         offset += i.size();
@@ -736,6 +744,11 @@ vector <Impulse> HrtfAttenuator::attenuate
     vector <Impulse> ret (impulses.size());
     cl::copy (queue, cl_out, ret.begin(), ret.end());
     return ret;
+}
+
+const array <array <array <cl_float8, 180>, 360>, 2> & HrtfAttenuator::getHrtfData() const
+{
+    return HRTF_DATA;
 }
 
 SpeakerAttenuator::SpeakerAttenuator()

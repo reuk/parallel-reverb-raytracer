@@ -308,6 +308,12 @@ private:
     std::vector <Impulse> storedImage;
 };
 
+struct HrtfConfig
+{
+    cl_float3 facing;
+    cl_float3 up;
+};
+
 struct Attenuator: public KernelLoader
 {
     cl::Buffer cl_in;
@@ -318,12 +324,20 @@ class HrtfAttenuator: public Attenuator
 {
 public:
     HrtfAttenuator();
+
+    std::vector <std::vector <Impulse>> attenuate
+    (   const RaytracerResults & results
+    ,   const HrtfConfig & config
+    );
     std::vector <std::vector <Impulse>> attenuate
     (   const RaytracerResults & results
     ,   const cl_float3 & facing
     ,   const cl_float3 & up
     );
+
+    virtual const std::array <std::array <std::array <cl_float8, 180>, 360>, 2> & getHrtfData() const;
 private:
+    static const std::array <std::array <std::array <cl_float8, 180>, 360>, 2> HRTF_DATA;
     std::vector <Impulse> attenuate
     (   const cl_float3 & mic_pos
     ,   unsigned long channel
@@ -334,7 +348,6 @@ private:
 
     cl::Buffer cl_hrtf;
 
-    static const std::array <std::array <std::array <cl_float8, 180>, 360>, 2> HRTF_DATA;
     decltype
     (   cl::make_kernel
         <   cl_float3

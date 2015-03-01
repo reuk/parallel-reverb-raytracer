@@ -15,12 +15,6 @@ enum OutputMode
 ,   DIFFUSE_ONLY
 };
 
-struct HrtfConfig
-{
-    cl_float3 facing;
-    cl_float3 up;
-};
-
 struct AttenuationModel
 {
     enum Mode
