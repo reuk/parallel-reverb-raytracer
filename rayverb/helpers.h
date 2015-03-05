@@ -9,6 +9,7 @@ void print_diagnostic
 (   unsigned long nrays
 ,   unsigned long nreflections
 ,   const std::vector <Impulse> & reflections
+,   const std::string & fname
 );
 #endif
 

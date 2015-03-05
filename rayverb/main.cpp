@@ -152,22 +152,33 @@ int main(int argc, const char * argv[])
         ,   material_filename
         );
 
-        raytracer.raytrace (mic, source, directions, remove_direct);
+        raytracer.raytrace (mic, source, directions);
 
         RaytracerResults results;
         switch (output_mode)
         {
         case ALL:
-            results = raytracer.getAllRaw();
+            results = raytracer.getAllRaw (remove_direct);
             break;
         case IMAGE_ONLY:
-            results = raytracer.getRawImages();
+            results = raytracer.getRawImages (remove_direct);
             break;
         case DIFFUSE_ONLY:
             results = raytracer.getRawDiffuse();
             break;
+        default:
+            cerr << "This point should never be reached. Aborting" << endl;
+            exit (1);
         }
 
+#ifdef DIAGNOSTIC
+        print_diagnostic
+        (   numRays
+        ,   numImpulses
+        ,   raytracer.getRawDiffuse().impulses
+        ,   "impulse.dump"
+        );
+#endif
         switch (attenuationModel.mode)
         {
         case AttenuationModel::SPEAKER:

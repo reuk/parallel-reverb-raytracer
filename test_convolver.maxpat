@@ -9,7 +9,7 @@
 			"modernui" : 1
 		}
 ,
-		"rect" : [ 963.0, 81.0, 1514.0, 1151.0 ],
+		"rect" : [ 887.0, 195.0, 973.0, 1025.0 ],
 		"bglocked" : 0,
 		"openinpresentation" : 1,
 		"default_fontsize" : 9.0,
@@ -37,6 +37,19 @@
 		"style" : "",
 		"subpatcher_template" : "with_grid",
 		"boxes" : [ 			{
+				"box" : 				{
+					"id" : "obj-9",
+					"maxclass" : "toggle",
+					"numinlets" : 1,
+					"numoutlets" : 1,
+					"outlettype" : [ "int" ],
+					"parameter_enable" : 0,
+					"patching_rect" : [ 315.0, 915.0, 24.0, 24.0 ],
+					"style" : ""
+				}
+
+			}
+, 			{
 				"box" : 				{
 					"id" : "obj-4",
 					"maxclass" : "newobj",
@@ -173,7 +186,7 @@
 , 			{
 				"box" : 				{
 					"id" : "obj-80",
-					"items" : [ "far_0_out", ",", "far_1_out", ",", "far_2_out", ",", "far_3_out", ",", "far_4_out", ",", "far_5_out", ",", "far_6_out", ",", "far_7_out", ",", "med_0_out", ",", "med_1_out", ",", "med_2_out", ",", "med_3_out", ",", "med_4_out", ",", "med_5_out", ",", "med_6_out", ",", "med_7_out", ",", "near_0_out", ",", "near_1_out", ",", "near_2_out", ",", "near_3_out", ",", "near_4_out", ",", "near_5_out", ",", "near_6_out", ",", "near_7_out", ",", "out" ],
+					"items" : "out",
 					"maxclass" : "umenu",
 					"numinlets" : 1,
 					"numoutlets" : 3,
@@ -496,22 +509,22 @@
 								"filekind" : "audiofile",
 								"loop" : 1,
 								"content_state" : 								{
-									"play" : [ 0 ],
-									"pitchshiftcent" : [ 0 ],
 									"mode" : [ "basic" ],
-									"originallength" : [ 0.0, "ticks" ],
-									"originaltempo" : [ 120.0 ],
-									"formant" : [ 1.0 ],
-									"followglobaltempo" : [ 0 ],
+									"pitchshiftcent" : [ 0 ],
 									"formantcorrection" : [ 0 ],
-									"originallengthms" : [ 0.0 ],
-									"timestretch" : [ 0 ],
-									"basictuning" : [ 440 ],
-									"pitchshift" : [ 1.0 ],
 									"pitchcorrection" : [ 0 ],
-									"quality" : [ "basic" ],
+									"originallength" : [ 0.0, "ticks" ],
+									"originallengthms" : [ 0.0 ],
 									"slurtime" : [ 0.0 ],
-									"speed" : [ 1.0 ]
+									"originaltempo" : [ 120.0 ],
+									"timestretch" : [ 0 ],
+									"quality" : [ "basic" ],
+									"formant" : [ 1.0 ],
+									"basictuning" : [ 440 ],
+									"speed" : [ 1.0 ],
+									"play" : [ 0 ],
+									"followglobaltempo" : [ 0 ],
+									"pitchshift" : [ 1.0 ]
 								}
 
 							}
@@ -1063,6 +1076,15 @@
 					"disabled" : 0,
 					"hidden" : 0,
 					"source" : [ "obj-89", 0 ]
+				}
+
+			}
+, 			{
+				"patchline" : 				{
+					"destination" : [ "obj-1", 0 ],
+					"disabled" : 0,
+					"hidden" : 0,
+					"source" : [ "obj-9", 0 ]
 				}
 
 			}

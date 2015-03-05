@@ -6,8 +6,10 @@
 #endif
 
 #include <iostream>
+#include <fstream>
 #include <cmath>
 #include <random>
+#include <chrono>
 
 using namespace std;
 
@@ -18,8 +20,11 @@ void print_diagnostic
 (   unsigned long nrays
 ,   unsigned long nreflections
 ,   const vector <Impulse> & impulses
+,   const string & fname
 )
 {
+    ofstream out (fname);
+
     for (auto i = 0; i != nrays; ++i)
     {
         StringBuffer stringBuffer;
@@ -39,20 +44,17 @@ void print_diagnostic
             writer.EndArray();
 
             writer.String ("volume");
-//            writer.StartArray();
             float average = 0;
             for (auto k = 0; k != 8; ++k)
                 average += reflection.volume.s [k];
             average /= 8;
             writer.Double (average);
-//                writer.Double (reflection.volume.s [k]);
-//            writer.EndArray();
 
             writer.EndObject();
         }
         writer.EndArray();
 
-        cout << stringBuffer.GetString() << endl;
+        out << stringBuffer.GetString() << endl;
     }
 }
 #endif
@@ -69,13 +71,11 @@ vector <cl_float3> getRandomDirections (unsigned long num)
     vector <cl_float3> ret (num);
     uniform_real_distribution <float> zDist (-1, 1);
     uniform_real_distribution <float> thetaDist (-M_PI, M_PI);
-    default_random_engine engine;
+    auto seed = chrono::system_clock::now().time_since_epoch().count();
+    default_random_engine engine (seed);
 
-    for_each (begin (ret), end (ret), [&] (cl_float3 & i)
-        {
-            i = spherePoint (zDist (engine), thetaDist (engine));
-        }
-    );
+    for (auto && i : ret)
+        i = spherePoint (zDist (engine), thetaDist (engine));
 
     return ret;
 }

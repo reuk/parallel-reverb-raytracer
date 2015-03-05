@@ -12,8 +12,9 @@
 #include <numeric>
 #include <iostream>
 #include <array>
+#include <map>
 
-#define DIAGNOSTIC
+//#define DIAGNOSTIC
 
 #define NUM_IMAGE_SOURCE 10
 #define SPEED_OF_SOUND (340.0f)
@@ -21,8 +22,6 @@
 //  These definitions MUST be kept up-to-date with the defs in the cl file.
 //  It might make sense to nest them inside the Scene because I don't think
 //  other classes will need the same data formats.
-//
-//  Unless I have a new class/kernel for constructing BVHs?
 
 /// Type used for storing multiband volumes.
 /// Higher values of 'x' in cl_floatx = higher numbers of parallel bands.
@@ -250,20 +249,18 @@ public:
     (   const cl_float3 & micpos
     ,   const cl_float3 & source
     ,   const std::vector <cl_float3> & directions
-    ,   bool remove_direct
     );
 
     /// Get raw, unprocessed diffuse impulses.
     RaytracerResults getRawDiffuse();
 
     /// Get raw, unprocessed image-source impulses.
-    RaytracerResults getRawImages();
+    RaytracerResults getRawImages (bool removeDirect);
 
     /// Get all raw, unprocessed impulses.
-    RaytracerResults getAllRaw();
+    RaytracerResults getAllRaw (bool removeDirect);
 
 private:
-    unsigned long ngroups;
     const unsigned long nreflections;
     const unsigned long ntriangles;
 
@@ -286,7 +283,7 @@ private:
     ,   SceneData sceneData
     );
 
-    static const int RAY_GROUP_SIZE = 8192;
+    static const unsigned long RAY_GROUP_SIZE = 8192;
 
     decltype
     (   cl::make_kernel
@@ -305,7 +302,7 @@ private:
     ) raytrace_kernel;
 
     std::vector <Impulse> storedDiffuse;
-    std::vector <Impulse> storedImage;
+    std::map <std::vector <unsigned long>, Impulse> imageSourceTally;
 };
 
 struct HrtfConfig

@@ -1,7 +1,7 @@
 {
-    "source_position": [0, -50, 20],
-    "mic_position": [-5, -125, 25],
-    "rays": 32768,
+    "source_position": [0, 2, 6],
+    "mic_position": [0, 2, -6],
+    "rays": 40000,
     "reflections": 128,
     "sample_rate": 44100,
     "bit_depth": 16,
@@ -13,6 +13,7 @@
     },
     "filter": "twopass",
     "hipass": false,
-    "trim_predelay": true,
-    "output_mode": "image_only"
+    "trim_predelay": false,
+    "trim_tail": true,
+    "output_mode": "all"
 }

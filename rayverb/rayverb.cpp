@@ -15,7 +15,6 @@
 #include <fstream>
 #include <streambuf>
 #include <sstream>
-#include <map>
 #include <iomanip>
 
 using namespace std;
@@ -231,8 +230,7 @@ Raytracer::Raytracer
 ,   vector <cl_float3> & vertices
 ,   vector <Surface> & surfaces
 )
-:   ngroups (0)
-,   nreflections (nreflections)
+:   nreflections (nreflections)
 ,   ntriangles (triangles.size())
 ,   cl_directions
     (   cl_context
@@ -289,12 +287,12 @@ public:
         if (! scene)
             throw runtime_error ("Failed to load object file.");
 
-        Surface surface = {
+        Surface defaultSurface = {
             (VolumeType) {{0.02, 0.02, 0.03, 0.03, 0.04, 0.05, 0.05, 0.05}},
             (VolumeType) {{0.50, 0.90, 0.95, 0.95, 0.95, 0.95, 0.95, 0.95}}
         };
 
-        surfaces.push_back (surface);
+        surfaces.push_back (defaultSurface);
 
         Document document;
         attemptJsonParse (materialFileName, document);
@@ -324,28 +322,22 @@ public:
         {
             const aiMesh * mesh = scene->mMeshes [i];
 
-            aiString name = mesh->mName;
-            cerr << "Found mesh: " << name.C_Str() << endl;
+            aiString meshName = mesh->mName;
+            cerr << "Found mesh: " << meshName.C_Str() << endl;
+            const aiMaterial * material =
+                scene->mMaterials [mesh->mMaterialIndex];
+
+            aiString matName;
+            material->Get (AI_MATKEY_NAME, matName);
 
             unsigned long mat_index = 0;
-            auto nameIterator = materialIndices.find (name.C_Str());
+            auto nameIterator = materialIndices.find (matName.C_Str());
             if (nameIterator != materialIndices.end())
                 mat_index = nameIterator->second;
 
             Surface surface = surfaces [mat_index];
 
-            vector <cl_float3> meshVertices (mesh->mNumVertices);
-
-            for (auto j = 0; j != mesh->mNumVertices; ++j)
-            {
-                meshVertices [j] = fromAIVec (mesh->mVertices [j]);
-            }
-
-            const aiMaterial * material =
-                scene->mMaterials [mesh->mMaterialIndex];
-            material->Get (AI_MATKEY_NAME, name);
-
-            cerr << "    Material name: " << name.C_Str() << endl;
+            cerr << "    Material name: " << matName.C_Str() << endl;
 
             cerr << "    Material properties: " << endl;
             cerr << "        specular: ["
@@ -368,6 +360,13 @@ public:
                  << surface.diffuse.s [6] << ", "
                  << surface.diffuse.s [7] << "]"
                  << endl;
+
+            vector <cl_float3> meshVertices (mesh->mNumVertices);
+
+            for (auto j = 0; j != mesh->mNumVertices; ++j)
+            {
+                meshVertices [j] = fromAIVec (mesh->mVertices [j]);
+            }
 
             vector <Triangle> meshTriangles (mesh->mNumFaces);
 
@@ -493,7 +492,6 @@ void Raytracer::raytrace
 (   const cl_float3 & micpos
 ,   const cl_float3 & source
 ,   const vector <cl_float3> & directions
-,   bool remove_direct
 )
 {
     storedMicpos = micpos;
@@ -536,21 +534,21 @@ void Raytracer::raytrace
         }
     }
 
-    ngroups = directions.size() / RAY_GROUP_SIZE;
-
-    storedDiffuse.resize (ngroups * RAY_GROUP_SIZE * nreflections);
-
-    map <vector <unsigned long>, Impulse> imageSourceTally;
-
-    for (auto i = 0; i != ngroups; ++i)
+    imageSourceTally.clear();
+    storedDiffuse.resize (directions.size() * nreflections);
+    for (auto i = 0; i != ceil (directions.size() / float (RAY_GROUP_SIZE)); ++i)
     {
+        auto b = i * RAY_GROUP_SIZE;
+        auto e = min (directions.size(), (i + 1) * RAY_GROUP_SIZE);
+
         cl::copy
         (   queue
-        ,   directions.begin() + (i + 0) * RAY_GROUP_SIZE
-        ,   directions.begin() + (i + 1) * RAY_GROUP_SIZE
+        ,   directions.begin() + b
+        ,   directions.begin() + e
         ,   cl_directions
         );
 
+        //  zero out impulse storage memory
         vector <Impulse> diffuse
             (RAY_GROUP_SIZE * nreflections, (Impulse) {{{0}}});
         cl::copy (queue, begin (diffuse), end (diffuse), cl_impulses);
@@ -618,21 +616,10 @@ void Raytracer::raytrace
         cl::copy
         (   queue
         ,   cl_impulses
-        ,   storedDiffuse.begin() + (i + 0) * RAY_GROUP_SIZE * nreflections
-        ,   storedDiffuse.begin() + (i + 1) * RAY_GROUP_SIZE * nreflections
+        ,   storedDiffuse.begin() + b * nreflections
+        ,   storedDiffuse.begin() + e * nreflections
         );
     }
-
-    if (remove_direct)
-        imageSourceTally.erase ({0});
-
-    storedImage.resize (imageSourceTally.size());
-    transform
-    (   begin (imageSourceTally)
-    ,   end (imageSourceTally)
-    ,   begin (storedImage)
-    ,   [] (const auto & i) {return i.second;}
-    );
 }
 
 RaytracerResults Raytracer::getRawDiffuse()
@@ -640,16 +627,28 @@ RaytracerResults Raytracer::getRawDiffuse()
     return RaytracerResults (storedDiffuse, storedMicpos);
 }
 
-RaytracerResults Raytracer::getRawImages()
+RaytracerResults Raytracer::getRawImages (bool removeDirect)
 {
-    return RaytracerResults (storedImage, storedMicpos);
+    auto temp = imageSourceTally;
+    if (removeDirect)
+        temp.erase ({0});
+
+    vector <Impulse> ret (temp.size());
+    transform
+    (   begin (temp)
+    ,   end (temp)
+    ,   begin (ret)
+    ,   [] (const auto & i) {return i.second;}
+    );
+    return RaytracerResults (ret, storedMicpos);
 }
 
-RaytracerResults Raytracer::getAllRaw()
+RaytracerResults Raytracer::getAllRaw (bool removeDirect)
 {
-    auto ret = storedDiffuse;
-    ret.insert (ret.end(), storedImage.begin(), storedImage.end());
-    return RaytracerResults (ret, storedMicpos);
+    auto diffuse = getRawDiffuse().impulses;
+    auto image = getRawImages (removeDirect).impulses;
+    diffuse.insert (diffuse.end(), image.begin(), image.end());
+    return RaytracerResults (diffuse, storedMicpos);
 }
 
 HrtfAttenuator::HrtfAttenuator()

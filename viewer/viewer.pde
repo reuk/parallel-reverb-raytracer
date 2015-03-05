@@ -1,7 +1,9 @@
 import saito.objloader.*;
 import org.json.*;
+import peasy.*;
 
 OBJModel model;
+PeasyCam cam;
 
 class Intersection
 {
@@ -30,17 +32,17 @@ void setup()
   
   rotateZ(PI / 2);
   
-  model = new OBJModel (this, "/Users/reuben/Desktop/room3.obj");
+  model = new OBJModel (this, "/Users/reuben/dev/parallel_raytrace/assets/test_models/large_square.obj");
   
-  JSONObject config_json = loadJSONObject ("../assets/config_hrtf.json");
+  JSONObject config_json = loadJSONObject ("../assets/large_square.json");
   JSONArray s_pos = config_json.getJSONArray ("source_position");
   JSONArray m_pos = config_json.getJSONArray ("mic_position");
   
-  source_pos = new PVector (s_pos.getFloat (0), s_pos.getFloat (1), s_pos.getFloat (2));
-  mic_pos = new PVector (m_pos.getFloat (0), m_pos.getFloat (1), m_pos.getFloat (2));
+  source_pos = new PVector (s_pos.getFloat (0), -s_pos.getFloat (1), s_pos.getFloat (2));
+  mic_pos = new PVector (m_pos.getFloat (0), -m_pos.getFloat (1), m_pos.getFloat (2));
 
   //BufferedReader reader = createReader ("/Users/reuben/Desktop/py_test_p.json");
-  BufferedReader reader = createReader ("/Users/reuben/dev/parallel_raytrace/out.dump");
+  BufferedReader reader = createReader ("/Users/reuben/dev/parallel_raytrace/build/bin/impulse.dump");
 
   boolean read = true;
   while (read)
@@ -54,7 +56,7 @@ void setup()
       for (int i = 0; i != json.length(); ++i)
       {
         JSON vec = json.getJSON (i).getJSON ("position");
-        PVector pvec = new PVector (vec.getFloat (0), vec.getFloat (1), vec.getFloat (2));
+        PVector pvec = new PVector (vec.getFloat (0), -vec.getFloat (1), vec.getFloat (2));
         list.add (new Intersection (pvec, json.getJSON (i).getFloat ("volume")));
       }
 
@@ -68,6 +70,12 @@ void setup()
   }
   
   println (trace.size());
+  
+  perspective (1, width / float (height), 1, 1000);
+  
+  cam = new PeasyCam(this, 100);
+  cam.setMinimumDistance(0);
+  cam.setMaximumDistance(200);
 }
 
 void vertex (PVector p) 
@@ -85,12 +93,18 @@ void stroke (PVector c)
   stroke (c.x, c.y, c.z);
 }
 
+boolean doFill = false;
+
+void mousePressed()
+{
+  doFill = !doFill;
+}
+
 void draw()
 {
+  lights();
   background (0.5);
-  translate (width / 2, height * 0.9);
-  rotateY (frameCount * TWO_PI * 0.01);
-  scale (4);
+//  scale (8);
   
   pushMatrix();
   fill (1, 0, 0);
@@ -106,8 +120,10 @@ void draw()
   sphere (1);
   popMatrix();
 
-  noFill();
-  strokeWeight (0.1);
+  if (doFill)
+    fill (0.5);
+  else
+    noFill();
   
   PVector mini = new PVector();
   PVector maxi = new PVector();
@@ -127,7 +143,8 @@ void draw()
       for (int k = 0; k != vertex.length; ++k)
       {        
         PVector temp = vertex [k].get();
-        temp = new PVector (temp.x, -temp.z, -temp.y);
+//        temp = new PVector (temp.x, -temp.z, -temp.y);
+          temp = new PVector (temp.x, temp.y, temp.z);
         
         mini.set (min (mini.x, temp.x), min (mini.y, temp.y), min (mini.z, temp.z));
         maxi.set (max (maxi.x, temp.x), max (maxi.y, temp.y), max (maxi.z, temp.z));
@@ -140,15 +157,17 @@ void draw()
   
   println (mouseX);
 
-  strokeWeight (0.3);
-
   ArrayList <Intersection> list = (ArrayList <Intersection>) trace.get (mouseX);
   
+  noFill();
   beginShape();
   for (int j = 0; j != list.size(); ++j)
   {
-    stroke (abs(((Intersection) list.get (j))._volume * 100000), 0, 0);
-    vertex (((Intersection) list.get (j))._position);
+    if (((Intersection) list.get (j))._position.x != 0 || ((Intersection) list.get (j))._position.y != 0 || ((Intersection) list.get (j))._position.z != 0)
+    {
+      stroke (abs(((Intersection) list.get (j))._volume * 100000), 0, 0);
+      vertex (((Intersection) list.get (j))._position);
+    }
   }
   endShape();
     

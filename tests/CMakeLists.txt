@@ -11,7 +11,7 @@ include_directories(
 )
 
 set(name tests)
-set(sources hrtf_tests.cpp hrtf.cpp main.cpp)
+set(sources raytrace_tests.cpp hrtf_tests.cpp hrtf.cpp main.cpp)
 
 add_definitions(${test_file_flag})
 

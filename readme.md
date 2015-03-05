@@ -94,3 +94,6 @@ now
 [x] constant volume scaling factor in max patch
 [x] max patch with ability to choose impulses from a menu
 [x] no predelay
+
+[?] scenes that should be really echoey aren't
+[ ] direct impulse not collision-tested
