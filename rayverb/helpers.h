@@ -28,6 +28,3 @@ cl_float3 spherePoint (float z, float theta);
 /// Get a bunch of unit vectors which can be used as ray starting directions.
 std::vector <cl_float3> getRandomDirections (unsigned long num);
 std::vector <cl_float3> getUniformDirections (unsigned long num);
-
-/// Grab an OpenCL context for GPUs on the system.
-cl::Context getContext();
