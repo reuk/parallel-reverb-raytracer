@@ -335,17 +335,28 @@ kernel void raytrace
     TriangleVerts prev_primitives [NUM_IMAGE_SOURCE - 1];
     float3 mic_reflection = position;
 
-    add_image
-    (   position
-    ,   mic_reflection
-    ,   source
-    ,   image_source
-    ,   image_source_index
-    ,   i
-    ,   0
-    ,   volume
-    ,   0
-    );
+    if
+    (   point_intersection
+        (   source
+        ,   mic_reflection
+        ,   triangles
+        ,   numtriangles
+        ,   vertices
+        )
+    )
+    {
+        add_image
+        (   position
+        ,   mic_reflection
+        ,   source
+        ,   image_source
+        ,   image_source_index
+        ,   i
+        ,   0
+        ,   volume
+        ,   0
+        );
+    }
 
     for (unsigned long index = 0; index != outputOffset; ++index)
     {

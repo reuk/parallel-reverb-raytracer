@@ -73,8 +73,8 @@ for next week
 
 * more models
     * make some
-* hundreds of impulses
-    * maybe just stereo ones
+    * hundreds of impulses
+        * maybe just stereo ones
 * where is the cutoff between rays and sound?
     * where are balancing points between other constraints?
 * listen in the studios
@@ -96,4 +96,4 @@ now
 [x] no predelay
 
 [?] scenes that should be really echoey aren't
-[ ] direct impulse not collision-tested
+[x] direct impulse not collision-tested
