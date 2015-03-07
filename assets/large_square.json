@@ -11,7 +11,7 @@
         ,   {   "direction": [1, 0, 1], "shape": 0.5}
         ]
     },
-    "filter": "twopass",
+    "filter": "linkwitz_riley",
     "hipass": false,
     "trim_predelay": false,
     "trim_tail": true,

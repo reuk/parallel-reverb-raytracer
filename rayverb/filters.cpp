@@ -126,7 +126,9 @@ vector <float> RayverbFiltering::BandpassWindowedSinc::bandpassKernel
     return fc.convolve (lop, hip);
 }
 
-void RayverbFiltering::BandpassWindowedSinc::filter (vector <float> & data)
+void RayverbFiltering::BandpassWindowedSinc::filter
+(   vector <float> & data
+)
 {
     data = convolve (kernel, data);
 }
@@ -141,19 +143,12 @@ void RayverbFiltering::BandpassWindowedSinc::setParams
     copy (i.begin(), i.end(), kernel.begin());
 }
 
-void RayverbFiltering::BandpassBiquadOnepass::biquad
-(   vector <float> & input
-,   double b0
-,   double b1
-,   double b2
-,   double a1
-,   double a2
-)
+void RayverbFiltering::Biquad::onepass (vector <float> & data)
 {
     double z1 = 0;
     double z2 = 0;
 
-    for (auto && i : input)
+    for (auto && i : data)
     {
         double out = i * b0 + z1;
         z1 = i * b1 + z2 - a1 * out;
@@ -162,9 +157,30 @@ void RayverbFiltering::BandpassBiquadOnepass::biquad
     }
 }
 
-void RayverbFiltering::BandpassBiquadOnepass::filter
-(   vector <float> & data
+void RayverbFiltering::Biquad::setParams
+(   double _b0
+,   double _b1
+,   double _b2
+,   double _a1
+,   double _a2
 )
+{
+    b0 = _b0;
+    b1 = _b1;
+    b2 = _b2;
+    a1 = _a1;
+    a2 = _a2;
+}
+
+void RayverbFiltering::Biquad::twopass (vector <float> & data)
+{
+    onepass (data);
+    reverse (begin (data), end (data));
+    onepass (data);
+    reverse (begin (data), end (data));
+}
+
+void RayverbFiltering::OnepassBandpassBiquad::setParams (float lo, float hi, float sr)
 {
     const double c = sqrt (lo * hi);
     const double omega = 2 * M_PI * c / sr;
@@ -174,33 +190,64 @@ void RayverbFiltering::BandpassBiquadOnepass::filter
     const double Q = sn / (log(2) * bandwidth * omega);
     const double alpha = sn * sinh (1 / (2 * Q));
 
-    double b0 = alpha;
-    double b1 = 0;
-    double b2 = -alpha;
-    double a0 = 1 + alpha;
-    double a1 = -2 * cs;
-    double a2 = 1 - alpha;
-
+    const double a0 = 1 + alpha;
     const double nrm = 1 / a0;
 
-    b0 *= nrm;
-    b1 *= nrm;
-    b2 *= nrm;
-    a0 *= nrm;
-    a1 *= nrm;
-    a2 *= nrm;
-
-    biquad (data, b0, b1, b2, a1, a2);
+    Biquad::setParams
+    (   nrm * alpha
+    ,   nrm * 0
+    ,   nrm * -alpha
+    ,   nrm * (-2 * cs)
+    ,   nrm * (1 - alpha)
+    );
 }
 
-void RayverbFiltering::BandpassBiquadTwopass::filter (vector <float> & data)
+void RayverbFiltering::OnepassBandpassBiquad::filter (vector <float> & data)
 {
-    BandpassBiquadOnepass b;
-    b.setParams (lo, hi, sr);
-    b.filter (data);
-    reverse (begin (data), end (data));
-    b.filter (data);
-    reverse (begin (data), end (data));
+    onepass (data);
+}
+
+void RayverbFiltering::TwopassBandpassBiquad::filter (vector <float> & data)
+{
+    twopass (data);
+}
+
+double getC (double co, double sr)
+{
+    const double wcT = M_PI * co / sr;
+    return cos (wcT) / sin (wcT);
+}
+
+void RayverbFiltering::LinkwitzRiley::setParams (float l, float h, float s)
+{
+    {
+        const double c = getC (h, s);
+        const double a0 = c * c + c * sqrt (2) + 1;
+        lopass.setParams
+        (   1 / a0
+        ,   2 / a0
+        ,   1 / a0
+        ,   (-2 * (c * c - 1)) / a0
+        ,   (c * c - c * sqrt (2) + 1) / a0
+        );
+    }
+    {
+        const double c = getC (l, s);
+        const double a0 = c * c + c * sqrt (2) + 1;
+        hipass.setParams
+        (   (c * c) / a0
+        ,   (-2 * c * c) / a0
+        ,   (c * c) / a0
+        ,   (-2 * (c * c - 1)) / a0
+        ,   (c * c - c * sqrt (2) + 1) / a0
+        );
+    }
+}
+
+void RayverbFiltering::LinkwitzRiley::filter (vector <float> & data)
+{
+    lopass.twopass (data);
+    hipass.twopass (data);
 }
 
 void RayverbFiltering::filter
@@ -217,10 +264,13 @@ void RayverbFiltering::filter
         bp = unique_ptr <Bandpass> (new BandpassWindowedSinc (data.front().front().size()));
         break;
     case FILTER_TYPE_BIQUAD_ONEPASS:
-        bp = unique_ptr <Bandpass> (new BandpassBiquadOnepass());
+        bp = unique_ptr <Bandpass> (new OnepassBandpassBiquad());
         break;
     case FILTER_TYPE_BIQUAD_TWOPASS:
-        bp = unique_ptr <Bandpass> (new BandpassBiquadTwopass());
+        bp = unique_ptr <Bandpass> (new TwopassBandpassBiquad());
+        break;
+    case FILTER_TYPE_LINKWITZ_RILEY:
+        bp = unique_ptr <Bandpass> (new LinkwitzRiley());
         break;
     }
 
@@ -236,7 +286,6 @@ void RayverbFiltering::filter
         }
     }
 }
-
 
 RayverbFiltering::FastConvolution::FastConvolution (unsigned long FFT_LENGTH)
 :   FFT_LENGTH (FFT_LENGTH)

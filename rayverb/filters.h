@@ -12,11 +12,13 @@
 /// filtering.
 namespace RayverbFiltering
 {
+    using namespace std;
+
     class Filter
     {
     public:
         /// Given a vector of data, return a bandpassed version of the data.
-        virtual void filter (std::vector <float> & data) = 0;
+        virtual void filter (vector <float> & data) = 0;
     };
 
     class Hipass: public Filter
@@ -41,7 +43,7 @@ namespace RayverbFiltering
         virtual ~FastConvolution();
 
         template <typename T, typename U>
-        std::vector <float> convolve
+        vector <float> convolve
         (   const T & a
         ,   const U & b
         )
@@ -64,7 +66,7 @@ namespace RayverbFiltering
 
             fftwf_execute (c2r);
 
-            return std::vector <float> (c2r_o, c2r_o + FFT_LENGTH);
+            return vector <float> (c2r_o, c2r_o + FFT_LENGTH);
         }
 
     private:
@@ -77,8 +79,8 @@ namespace RayverbFiltering
         ,   fftwf_complex * results
         )
         {
-            std::fill (i, i + FFT_LENGTH, 0);
-            std::copy (data.begin(), data.end(), i);
+            fill (i, i + FFT_LENGTH, 0);
+            copy (data.begin(), data.end(), i);
             fftwf_execute (plan);
             memcpy (results, o, sizeof (fftwf_complex) * CPLX_LENGTH);
         }
@@ -102,11 +104,11 @@ namespace RayverbFiltering
     public:
         HipassWindowedSinc (unsigned long inputLength);
 
-        virtual void filter (std::vector <float> & data);
+        virtual void filter (vector <float> & data);
         virtual void setParams (float co, float s);
     private:
         static const auto KERNEL_LENGTH = 29;
-        std::array <float, KERNEL_LENGTH> kernel;
+        array <float, KERNEL_LENGTH> kernel;
     };
 
     /// An interesting windowed-sinc bandpass filter.
@@ -116,46 +118,58 @@ namespace RayverbFiltering
         BandpassWindowedSinc (unsigned long inputLength);
 
         /// Filter a vector of data.
-        virtual void filter (std::vector <float> & data);
+        virtual void filter (vector <float> & data);
         virtual void setParams (float l, float h, float s);
     private:
         static const auto KERNEL_LENGTH = 29;
 
         /// Fetch a convolution kernel for a bandpass filter with the given
         /// paramters.
-        static std::vector <float> bandpassKernel
+        static vector <float> bandpassKernel
         (   float sr
         ,   float lo
         ,   float hi
         );
 
-        std::array <float, KERNEL_LENGTH> kernel;
+        array <float, KERNEL_LENGTH> kernel;
     };
 
-    /// Simple biquad bandpass filter.
-    class BandpassBiquadOnepass: public Bandpass
+    class Biquad
     {
     public:
-        /// Filter a vector of data.
-        virtual void filter (std::vector <float> & data);
-
-        /// Implements a simple biquad filter.
-        inline static void biquad
-        (   std::vector <float> & input
-        ,   double b0
+        void onepass (vector <float> & data);
+        void twopass (vector <float> & data);
+        void setParams
+        (   double b0
         ,   double b1
         ,   double b2
         ,   double a1
         ,   double a2
         );
+    private:
+        double b0, b1, b2, a1, a2;
     };
 
-    /// Twopass (definitely offline) linear-phase biquad bandpass filter.
-    class BandpassBiquadTwopass: public BandpassBiquadOnepass
+    /// Simple biquad bandpass filter.
+    class OnepassBandpassBiquad: public Bandpass, public Biquad
     {
     public:
-        /// Filter a vector of data.
-        virtual void filter (std::vector <float> & data);
+        void setParams (float l, float h, float s);
+        void filter (vector <float> & data);
+    };
+
+    class TwopassBandpassBiquad: public OnepassBandpassBiquad
+    {
+        void filter (vector <float> & data);
+    };
+
+    class LinkwitzRiley: public Bandpass
+    {
+    public:
+        void setParams (float l, float h, float s);
+        void filter (vector <float> & data);
+    private:
+        Biquad lopass, hipass;
     };
 
     /// Enum denoting available filter types.
@@ -163,13 +177,14 @@ namespace RayverbFiltering
     {   FILTER_TYPE_WINDOWED_SINC
     ,   FILTER_TYPE_BIQUAD_ONEPASS
     ,   FILTER_TYPE_BIQUAD_TWOPASS
+    ,   FILTER_TYPE_LINKWITZ_RILEY
     };
 
     /// Given a filter type and a vector of vector of float, return the
     /// parallel-filtered and summed data, using the specified filtering method.
     void filter
     (   FilterType ft
-    ,   std::vector <std::vector <std::vector <float>>> & data
+    ,   vector <vector <vector <float>>> & data
     ,   float sr
     );
 }

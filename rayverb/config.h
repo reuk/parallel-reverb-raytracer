@@ -282,9 +282,10 @@ struct JsonGetter<RayverbFiltering::FilterType>: public JsonEnumGetter <RayverbF
     JsonGetter (RayverbFiltering::FilterType & t)
     :   JsonEnumGetter
         (   t
-        ,   {   {"sinc",    RayverbFiltering::FILTER_TYPE_WINDOWED_SINC}
-            ,   {"onepass", RayverbFiltering::FILTER_TYPE_BIQUAD_ONEPASS}
-            ,   {"twopass", RayverbFiltering::FILTER_TYPE_BIQUAD_TWOPASS}
+        ,   {   {"sinc",           RayverbFiltering::FILTER_TYPE_WINDOWED_SINC}
+            ,   {"onepass",        RayverbFiltering::FILTER_TYPE_BIQUAD_ONEPASS}
+            ,   {"twopass",        RayverbFiltering::FILTER_TYPE_BIQUAD_TWOPASS}
+            ,   {"linkwitz_riley", RayverbFiltering::FILTER_TYPE_LINKWITZ_RILEY}
             }
         )
     {}
