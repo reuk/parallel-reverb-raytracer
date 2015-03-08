@@ -235,7 +235,7 @@ private:
     ,   SceneData sceneData
     );
 
-    static const unsigned long RAY_GROUP_SIZE = 8192;
+    static const unsigned long RAY_GROUP_SIZE = 4096;
 
     decltype
     (   cl::make_kernel

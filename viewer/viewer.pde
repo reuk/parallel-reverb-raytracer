@@ -32,16 +32,15 @@ void setup()
   
   rotateZ(PI / 2);
   
-  model = new OBJModel (this, "/Users/reuben/dev/parallel_raytrace/assets/test_models/large_square.obj");
+  model = new OBJModel (this, "/Users/reuben/dev/parallel_raytrace/assets/test_models/bedroom.obj");
   
-  JSONObject config_json = loadJSONObject ("../assets/large_square.json");
+  JSONObject config_json = loadJSONObject ("../assets/bedroom.json");
   JSONArray s_pos = config_json.getJSONArray ("source_position");
   JSONArray m_pos = config_json.getJSONArray ("mic_position");
   
   source_pos = new PVector (s_pos.getFloat (0), -s_pos.getFloat (1), s_pos.getFloat (2));
   mic_pos = new PVector (m_pos.getFloat (0), -m_pos.getFloat (1), m_pos.getFloat (2));
 
-  //BufferedReader reader = createReader ("/Users/reuben/Desktop/py_test_p.json");
   BufferedReader reader = createReader ("/Users/reuben/dev/parallel_raytrace/build/bin/impulse.dump");
 
   boolean read = true;

@@ -9,6 +9,7 @@
 #include "sndfile.hh"
 
 #include <iostream>
+#include <fstream>
 #include <vector>
 #include <random>
 #include <algorithm>
@@ -16,6 +17,8 @@
 #include <map>
 
 #include <gflags/gflags.h>
+
+#include <sys/stat.h>
 
 using namespace std;
 using namespace rapidjson;
@@ -60,6 +63,18 @@ void write_aiff
     }
 }
 
+bool file_is_readable (const string & i)
+{
+    struct stat buffer;
+    return (stat (i.c_str(), &buffer) == 0);
+}
+
+bool file_is_writable (const string & i)
+{
+    ofstream os (i);
+    return os.is_open() && (os << "test string" << endl);
+}
+
 int main(int argc, const char * argv[])
 {
     argc -= 1;
@@ -67,13 +82,33 @@ int main(int argc, const char * argv[])
     if (argc != 4)
     {
         cerr << "Command-line parameters are <config file (.json)> <model file> <material file (.json)> <output file (.aif)>" << endl;
-        return 1;
+        exit (1);
     }
 
     string config_filename (argv [1]);
     string model_filename (argv [2]);
     string material_filename (argv [3]);
     string output_filename (argv [4]);
+
+    //  check input files exist
+    for (const auto & i : {config_filename, model_filename, material_filename})
+    {
+        if (! file_is_readable (i))
+        {
+            cerr << "input file " << i << " does not exist" << endl;
+            exit (1);
+        }
+    }
+
+    //  check output files can be written
+    for (const auto & i : {output_filename})
+    {
+        if (! file_is_writable (i))
+        {
+            cerr << "output file " << i << " cannot be written" << endl;
+            exit (1);
+        }
+    }
 
     //  required params
     cl_float3 source = {{0, 0, 0, 0}};
@@ -204,7 +239,7 @@ int main(int argc, const char * argv[])
         cerr << "encountered opencl error:" << endl;
         cerr << error.what() << endl;
         cerr << error.err() << endl;
-        return 1;
+        exit (1);
     }
     catch (runtime_error error)
     {
@@ -233,5 +268,5 @@ int main(int argc, const char * argv[])
     ,   volumme_scale
     );
     write_aiff (output_filename, processed, sampleRate, bitDepth);
-    return 0;
+    exit (0);
 }

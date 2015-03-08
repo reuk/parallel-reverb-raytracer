@@ -143,7 +143,7 @@ vector <vector <float>> process
     if (do_hipass)
     {
         RayverbFiltering::HipassWindowedSinc hp (ret.front().size());
-        hp.setParams (10, sr);
+        hp.setParams (1, sr);
         for (auto && i : ret)
             hp.filter (i);
     }

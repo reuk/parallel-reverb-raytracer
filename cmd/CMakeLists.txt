@@ -21,3 +21,7 @@ set(libraries rayverb assimp fftw3f sndfile ${frameworks})
 add_executable(${name} ${sources})
 
 target_link_libraries(${name} ${libraries})
+
+install(TARGETS ${name}
+    RUNTIME DESTINATION bin
+)
