@@ -128,6 +128,8 @@ int main(int argc, const char * argv[])
     auto trim_tail = true;
     auto output_mode = ALL;
 
+    auto show_diagnostics = false;
+
     AttenuationModel attenuationModel;
 
     Document document;
@@ -165,6 +167,7 @@ int main(int argc, const char * argv[])
     cv.addOptionalValidator ("remove_direct", remove_direct);
     cv.addOptionalValidator ("trim_tail", trim_tail);
     cv.addOptionalValidator ("output_mode", output_mode);
+    cv.addOptionalValidator ("verbose", show_diagnostics);
 
     try
     {
@@ -185,9 +188,10 @@ int main(int argc, const char * argv[])
         (   numImpulses
         ,   model_filename
         ,   material_filename
+        ,   show_diagnostics
         );
 
-        raytracer.raytrace (mic, source, directions);
+        raytracer.raytrace (mic, source, directions, show_diagnostics);
 
         RaytracerResults results;
         switch (output_mode)

@@ -25,3 +25,5 @@ target_link_libraries(${name} ${libraries})
 install(TARGETS ${name}
     RUNTIME DESTINATION bin
 )
+
+install(FILES parallel_raytrace.1 DESTINATION /usr/share/man/man1)

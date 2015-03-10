@@ -68,19 +68,8 @@ to do
 * check high frequency content - sounds a bit dull
     * might just be my test model
 
-for next week
--------------
-
-* more models
-    * make some
-    * hundreds of impulses
-        * maybe just stereo ones
 * where is the cutoff between rays and sound?
     * where are balancing points between other constraints?
-* listen in the studios
-
-now
----
 
 [x] diffuse vs image source
 [x] no direct impulse
@@ -97,3 +86,47 @@ now
 
 [?] scenes that should be really echoey aren't
 [x] direct impulse not collision-tested
+
+[ ] why no comb filtering in square rooms?
+[ ] is there echo in long rooms?
+[ ] fix bottom-band filtering
+    * where should the bottom cutoff be? 45Hz maybe?
+    * what sounds good?
+    * check damping coefficients - make some nice-sounding ones
+[ ] power/distance law
+[ ] compare results to commercial software
+[ ] check how portable the software is
+[ ] deduce output filetype from extension?
+[ ] check the diffuse coefficients
+
+Documentation
+=============
+
+* be verbose about what the user has to do
+* examples!
+
+Writeup structure
+=================
+
+* project scope / goals / domain - what is the problem?
+
+* literature review - previous research, and what it's achieved
+    * what have you read?
+    * what could you have done?
+    * what did you decide to do?
+
+* project design / implementation
+    * libraries I've used
+    * technologies
+    * code structure - algortithm design
+    * rationale - why did you decide on this approach
+
+* evaluation
+    * progress throughout the project
+        * problems you had and how you overcame them
+            * specific problems, or specific ways you went about testing
+    * what would you change or do differently in future projects?
+    * did the process work?
+
+
+This week - 2/3 audio evaluation and fixing, 1/3 report

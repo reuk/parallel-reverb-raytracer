@@ -29,7 +29,7 @@ namespace TestsNamespace {
 
     TEST_F(RaytracerTest, ImpulseDirections)
     {
-        raytrace (mic_pos, src_pos, directions);
+        raytrace (mic_pos, src_pos, directions, true);
         auto diffuse = getRawDiffuse().impulses;
 
         test_eq (diffuse [0 * NUM_REFLECTIONS + 0].position, {{0, 2, -27}});

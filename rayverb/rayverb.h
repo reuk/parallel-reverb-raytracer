@@ -163,6 +163,7 @@ class KernelLoader: public ContextProvider
 {
 public:
     KernelLoader();
+    KernelLoader(bool verbose);
 
     cl::Program cl_program;
     cl::CommandQueue queue;
@@ -189,18 +190,21 @@ public:
     ,   std::vector <Triangle> & triangles
     ,   std::vector <cl_float3> & vertices
     ,   std::vector <Surface> & surfaces
+    ,   bool verbose
     );
 
     Raytracer
     (   unsigned long nreflections
     ,   const std::string & objpath
     ,   const std::string & materialFileName
+    ,   bool verbose
     );
 
     void raytrace
     (   const cl_float3 & micpos
     ,   const cl_float3 & source
     ,   const std::vector <cl_float3> & directions
+    ,   bool verbose
     );
 
     /// Get raw, unprocessed diffuse impulses.
@@ -233,6 +237,7 @@ private:
     Raytracer
     (   unsigned long nreflections
     ,   SceneData sceneData
+    ,   bool verbose
     );
 
     static const unsigned long RAY_GROUP_SIZE = 4096;
@@ -250,6 +255,7 @@ private:
         ,   cl::Buffer
         ,   cl::Buffer
         ,   cl_ulong
+        ,   VolumeType
         > (cl_program, "raytrace")
     ) raytrace_kernel;
 

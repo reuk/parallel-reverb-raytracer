@@ -175,6 +175,12 @@ ContextProvider::ContextProvider()
 }
 
 KernelLoader::KernelLoader()
+:   KernelLoader (false)
+{
+
+}
+
+KernelLoader::KernelLoader(bool verbose)
 :   cl_program (cl_context, KERNEL_STRING, false)
 {
     vector <cl::Device> device = cl_context.getInfo <CL_CONTEXT_DEVICES>();
@@ -183,9 +189,10 @@ KernelLoader::KernelLoader()
     cl_program.build (used_devices);
     cl::Device used_device = used_devices.front();
 
-    cerr
-    <<  cl_program.getBuildInfo <CL_PROGRAM_BUILD_LOG> (used_device)
-    <<  endl;
+    if (verbose)
+        cerr
+        <<  cl_program.getBuildInfo <CL_PROGRAM_BUILD_LOG> (used_device)
+        <<  endl;
 
     queue = cl::CommandQueue (cl_context, used_device);
 }
@@ -229,8 +236,10 @@ Raytracer::Raytracer
 ,   vector <Triangle> & triangles
 ,   vector <cl_float3> & vertices
 ,   vector <Surface> & surfaces
+,   bool verbose
 )
-:   nreflections (nreflections)
+:   KernelLoader (verbose)
+,   nreflections (nreflections)
 ,   ntriangles (triangles.size())
 ,   cl_directions
     (   cl_context
@@ -269,6 +278,7 @@ Raytracer::Raytracer
         ,   cl::Buffer
         ,   cl::Buffer
         ,   cl_ulong
+        ,   VolumeType
         > (cl_program, "raytrace")
     )
 {
@@ -277,12 +287,12 @@ Raytracer::Raytracer
 struct Raytracer::SceneData
 {
 public:
-    SceneData (const string & objpath, const string & materialFileName)
+    SceneData (const string & objpath, const string & materialFileName, bool verbose)
     {
-        populate (objpath, materialFileName);
+        populate (objpath, materialFileName, verbose);
     }
 
-    void populate (const aiScene * scene, const string & materialFileName)
+    void populate (const aiScene * scene, const string & materialFileName, bool verbose)
     {
         if (! scene)
             throw runtime_error ("Failed to load object file.");
@@ -323,7 +333,8 @@ public:
             const aiMesh * mesh = scene->mMeshes [i];
 
             aiString meshName = mesh->mName;
-            cerr << "Found mesh: " << meshName.C_Str() << endl;
+            if (verbose)
+                cerr << "Found mesh: " << meshName.C_Str() << endl;
             const aiMaterial * material =
                 scene->mMaterials [mesh->mMaterialIndex];
 
@@ -337,29 +348,32 @@ public:
 
             Surface surface = surfaces [mat_index];
 
-            cerr << "    Material name: " << matName.C_Str() << endl;
+            if (verbose)
+            {
+                cerr << "    Material name: " << matName.C_Str() << endl;
 
-            cerr << "    Material properties: " << endl;
-            cerr << "        specular: ["
-                 << surface.specular.s [0] << ", "
-                 << surface.specular.s [1] << ", "
-                 << surface.specular.s [2] << ", "
-                 << surface.specular.s [3] << ", "
-                 << surface.specular.s [4] << ", "
-                 << surface.specular.s [5] << ", "
-                 << surface.specular.s [6] << ", "
-                 << surface.specular.s [7] << "]"
-                 << endl;
-            cerr << "        diffuse: ["
-                 << surface.diffuse.s [0] << ", "
-                 << surface.diffuse.s [1] << ", "
-                 << surface.diffuse.s [2] << ", "
-                 << surface.diffuse.s [3] << ", "
-                 << surface.diffuse.s [4] << ", "
-                 << surface.diffuse.s [5] << ", "
-                 << surface.diffuse.s [6] << ", "
-                 << surface.diffuse.s [7] << "]"
-                 << endl;
+                cerr << "    Material properties: " << endl;
+                cerr << "        specular: ["
+                     << surface.specular.s [0] << ", "
+                     << surface.specular.s [1] << ", "
+                     << surface.specular.s [2] << ", "
+                     << surface.specular.s [3] << ", "
+                     << surface.specular.s [4] << ", "
+                     << surface.specular.s [5] << ", "
+                     << surface.specular.s [6] << ", "
+                     << surface.specular.s [7] << "]"
+                     << endl;
+                cerr << "        diffuse: ["
+                     << surface.diffuse.s [0] << ", "
+                     << surface.diffuse.s [1] << ", "
+                     << surface.diffuse.s [2] << ", "
+                     << surface.diffuse.s [3] << ", "
+                     << surface.diffuse.s [4] << ", "
+                     << surface.diffuse.s [5] << ", "
+                     << surface.diffuse.s [6] << ", "
+                     << surface.diffuse.s [7] << "]"
+                     << endl;
+            }
 
             vector <cl_float3> meshVertices (mesh->mNumVertices);
 
@@ -395,14 +409,17 @@ public:
             );
         }
 
-        cerr
-        <<  "Loaded 3D model with "
-        <<  triangles.size()
-        <<  " triangles"
-        <<  endl;
+        if (verbose)
+        {
+            cerr
+            <<  "Loaded 3D model with "
+            <<  triangles.size()
+            <<  " triangles"
+            <<  endl;
+        }
     }
 
-    void populate (const string & objpath, const string & materialFileName)
+    void populate (const string & objpath, const string & materialFileName, bool verbose)
     {
         Assimp::Importer importer;
         populate
@@ -414,6 +431,7 @@ public:
                 )
             )
         ,   materialFileName
+        ,   verbose
         );
     }
 
@@ -467,10 +485,12 @@ Raytracer::Raytracer
 (   unsigned long nreflections
 ,   const string & objpath
 ,   const string & materialFileName
+,   bool verbose
 )
 :   Raytracer
 (   nreflections
-,   SceneData (objpath, materialFileName)
+,   SceneData (objpath, materialFileName, verbose)
+,   verbose
 )
 {
 }
@@ -478,12 +498,14 @@ Raytracer::Raytracer
 Raytracer::Raytracer
 (   unsigned long nreflections
 ,   SceneData sceneData
+,   bool verbose
 )
 :   Raytracer
 (   nreflections
 ,   sceneData.triangles
 ,   sceneData.vertices
 ,   sceneData.surfaces
+,   verbose
 )
 {
 }
@@ -492,6 +514,7 @@ void Raytracer::raytrace
 (   const cl_float3 & micpos
 ,   const cl_float3 & source
 ,   const vector <cl_float3> & directions
+,   bool verbose
 )
 {
     storedMicpos = micpos;
@@ -499,7 +522,7 @@ void Raytracer::raytrace
     //  check that mic and source are inside model bounds
     bool micinside = inside (bounds, micpos);
     bool srcinside = inside (bounds, source);
-    if (! (micinside && srcinside))
+    if (verbose && (! (micinside && srcinside)))
     {
         cerr
         <<  "model bounds: ["
@@ -579,6 +602,16 @@ void Raytracer::raytrace
         ,   cl_image_source
         ,   cl_image_source_index
         ,   nreflections
+        ,   (VolumeType)
+            {{  0.001 * -0.1
+            ,   0.001 * -0.2
+            ,   0.001 * -0.5
+            ,   0.001 * -1.1
+            ,   0.001 * -2.7
+            ,   0.001 * -9.4
+            ,   0.001 * -29.0
+            ,   0.001 * -60.0
+            }}
         );
 
         cl::copy

@@ -186,21 +186,10 @@ Intersection ray_triangle_intersection
     return ret;
 }
 
-VolumeType air_attenuation_for_distance (float distance);
-VolumeType air_attenuation_for_distance (float distance)
+VolumeType air_attenuation_for_distance (float distance, VolumeType AIR_COEFFICIENT);
+VolumeType air_attenuation_for_distance (float distance, VolumeType AIR_COEFFICIENT)
 {
-    const VolumeType AIR_COEFFICIENT =
-    {   0.001 * -0.1
-    ,   0.001 * -0.2
-    ,   0.001 * -0.5
-    ,   0.001 * -1.1
-    ,   0.001 * -2.7
-    ,   0.001 * -9.4
-    ,   0.001 * -29.0
-    ,   0.001 * -60.0
-    };
     return pow (M_E, distance * AIR_COEFFICIENT);
-    return (VolumeType) 1;
 }
 
 float power_attenuation_for_distance (float distance);
@@ -210,11 +199,11 @@ float power_attenuation_for_distance (float distance)
     return 1;
 }
 
-VolumeType attenuation_for_distance (float distance);
-VolumeType attenuation_for_distance (float distance)
+VolumeType attenuation_for_distance (float distance, VolumeType AIR_COEFFICIENT);
+VolumeType attenuation_for_distance (float distance, VolumeType AIR_COEFFICIENT)
 {
     return
-    (   air_attenuation_for_distance (distance)
+    (   air_attenuation_for_distance (distance, AIR_COEFFICIENT)
     *   power_attenuation_for_distance (distance)
     );
 }
@@ -244,6 +233,7 @@ void add_image
 ,   size_t thread_offset_index
 ,   VolumeType volume
 ,   unsigned long object_index
+,   VolumeType AIR_COEFFICIENT
 );
 void add_image
 (   float3 mic_position
@@ -255,13 +245,14 @@ void add_image
 ,   size_t thread_offset_index
 ,   VolumeType volume
 ,   unsigned long object_index
+,   VolumeType AIR_COEFFICIENT
 )
 {
     const float3 INIT_DIFF = source - mic_reflection;
     const float INIT_DIST = length (INIT_DIFF);
     const size_t OFFSET = thread_index * NUM_IMAGE_SOURCE + thread_offset_index;
     image_source [OFFSET] = (Impulse)
-    {   volume * attenuation_for_distance (INIT_DIST)
+    {   volume * attenuation_for_distance (INIT_DIST, AIR_COEFFICIENT)
     ,   mic_position + INIT_DIFF
     ,   SECONDS_PER_METER * INIT_DIST
     };
@@ -317,6 +308,7 @@ kernel void raytrace
 ,   global Impulse * image_source
 ,   global unsigned long * image_source_index
 ,   unsigned long outputOffset
+,   VolumeType AIR_COEFFICIENT
 )
 {
     size_t i = get_global_id (0);
@@ -355,6 +347,7 @@ kernel void raytrace
         ,   0
         ,   volume
         ,   0
+        ,   AIR_COEFFICIENT
         );
     }
 
@@ -453,6 +446,7 @@ kernel void raytrace
                 ,   index + 1
                 ,   volume
                 ,   closest.primitive + 1
+                ,   AIR_COEFFICIENT
                 );
             }
         }
@@ -473,8 +467,8 @@ kernel void raytrace
         const float DIFF = fabs (dot (triangle_normal (triangle, vertices), normalize (position - intersection)));
         impulses [i * outputOffset + index] = (Impulse)
         {   (   IS_INTERSECTION
-            ?   (   volume
-                *   attenuation_for_distance (DIST)
+            ?   (   newVol
+                *   attenuation_for_distance (DIST, AIR_COEFFICIENT)
                 *   surfaces [triangle->surface].diffuse
                 *   DIFF
                 )
