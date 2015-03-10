@@ -23,6 +23,30 @@
 using namespace std;
 using namespace rapidjson;
 
+void write_sndfile
+(   const string & fname
+,   const vector <vector <float>> & outdata
+,   float sr
+,   unsigned long bd
+,   unsigned long ftype
+)
+{
+    vector <float> interleaved (outdata.size() * outdata [0].size());
+
+    for (auto i = 0; i != outdata.size(); ++i)
+        for (auto j = 0; j != outdata [i].size(); ++j)
+            interleaved [j * outdata.size() + i] = outdata [i] [j];
+
+    SndfileHandle outfile
+    (   fname
+    ,   SFM_WRITE
+    ,   ftype | bd
+    ,   outdata.size()
+    ,   sr
+    );
+    outfile.write (interleaved.data(), interleaved.size());
+}
+
 void write_aiff
 (   const string & fname
 ,   const vector <vector <float>> & outdata
@@ -180,6 +204,38 @@ int main(int argc, const char * argv[])
         exit (1);
     }
 
+    map <unsigned long, unsigned long> depthTable
+    {   {16, SF_FORMAT_PCM_16}
+    ,   {24, SF_FORMAT_PCM_24}
+    };
+
+    auto depthIt = depthTable.find (bitDepth);
+    if (depthIt == depthTable.end())
+    {
+        cerr << "Invalid bitdepth - valid bitdepths are: ";
+        for (const auto & i : depthTable)
+            cerr << i.first << " ";
+        cerr << endl;
+        exit (1);
+    }
+
+    map <string, unsigned long> ftypeTable
+    {   {"aif", SF_FORMAT_AIFF}
+    ,   {"aiff", SF_FORMAT_AIFF}
+    ,   {"wav", SF_FORMAT_WAV}
+    };
+
+    auto extension = output_filename.substr (output_filename.find_last_of (".") + 1);
+    auto ftypeIt = ftypeTable.find (extension);
+    if (ftypeIt == ftypeTable.end())
+    {
+        cerr << "Invalid output file extension - valid extensions are: ";
+        for (const auto & i : ftypeTable)
+            cerr << i.first << " ";
+        cerr << endl;
+        exit (1);
+    }
+
     auto directions = getRandomDirections (numRays);
     vector <vector <Impulse>> attenuated;
     try
@@ -271,6 +327,6 @@ int main(int argc, const char * argv[])
     ,   trim_tail
     ,   volumme_scale
     );
-    write_aiff (output_filename, processed, sampleRate, bitDepth);
+    write_sndfile (output_filename, processed, sampleRate, depthIt->second, ftypeIt->second);
     exit (0);
 }

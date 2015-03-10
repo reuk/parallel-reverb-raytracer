@@ -3,9 +3,12 @@
 .PP
 parallel_raytrace \- fast generator of raytraced impulse responses
 .SH SYNOPSIS
-.PP
-parallel_raytrace [configuration\-file (.json)] [3D\-object\-file]
-[material\-file (.json)] [output\-file (.aiff)]
+.IP
+.nf
+\f[C]
+parallel_raytrace\ [configuration\-file\ (.json)]\ [3D\-object\-file]\ [material\-file\ (.json)]\ [output\-file\ (.aiff)]
+\f[]
+.fi
 .SH DESCRIPTION
 .SS Overview
 .PP
@@ -43,8 +46,13 @@ materials to the material file.
 .PP
 Finally, the output file is the impulse response file that will be
 written.
-At the moment, only .aiff formats are supported, in 16 or 24 bits, at
-various samplerates.
+The filetype will be deduced from the extension of the filename that is
+provided.
+Valid extensions are \f[C]\&.aif\f[], \f[C]\&.aiff\f[], and
+\f[C]\&.wav\f[].
+The bitdepth and samplerate can be specified in the config file.
+The bitdepth must be either 16 or 24 bits, but the sampling rate can
+take any value.
 .SS Algorithm Description
 .PP
 The algorithm takes advantage of the \[aq]embarrassing parallelism\[aq]

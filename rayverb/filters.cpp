@@ -277,7 +277,8 @@ void RayverbFiltering::filter
     for (auto && channel : data)
     {
         const vector <float> EDGES
-            ({90, 175, 350, 700, 1400, 2800, 5600, 11200, 20000});
+//            ({90, 175, 350, 700, 1400, 2800, 5600, 11200, 20000});
+            ({45, 175, 350, 700, 1400, 2800, 5600, 11200, 20000});
 
         for (auto i = 0; i != channel.size(); ++i)
         {

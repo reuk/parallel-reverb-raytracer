@@ -8,7 +8,9 @@ parallel_raytrace - fast generator of raytraced impulse responses
 
 # SYNOPSIS
 
+```
 parallel_raytrace [configuration-file (.json)] [3D-object-file] [material-file (.json)] [output-file (.aiff)]
+```
 
 # DESCRIPTION
 
@@ -44,8 +46,12 @@ You can just check this .mtl for the material names, and add appropriate
 materials to the material file.
 
 Finally, the output file is the impulse response file that will be written.
-At the moment, only .aiff formats are supported, in 16 or 24 bits, at various
-samplerates.
+The filetype will be deduced from the extension of the filename that is
+provided.
+Valid extensions are `.aif`, `.aiff`, and `.wav`.
+The bitdepth and samplerate can be specified in the config file.
+The bitdepth must be either 16 or 24 bits, but the sampling rate can take any
+value.
 
 ## Algorithm Description
 

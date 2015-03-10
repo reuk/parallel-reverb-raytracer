@@ -464,7 +464,13 @@ kernel void raytrace
         );
 
         const float DIST = IS_INTERSECTION ? newDist + length (position - intersection) : 0;
-        const float DIFF = fabs (dot (triangle_normal (triangle, vertices), normalize (position - intersection)));
+        //const float DIFF = fabs (dot (triangle_normal (triangle, vertices), normalize (position - intersection)));
+
+        //  The reflected luminous intensity in any direction from a perfectly
+        //  diffusing surface varies as the cosine of the angle between the
+        //  direction of incident light and the normal vector of the surface.
+        //  http://www.cs.rit.edu/~jmg/courses/procshade/20073/slides/3-1-brdf.pdf
+        const float DIFF = fabs (dot (triangle_normal (triangle, vertices), ray.direction));
         impulses [i * outputOffset + index] = (Impulse)
         {   (   IS_INTERSECTION
             ?   (   newVol

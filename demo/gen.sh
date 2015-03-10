@@ -2,68 +2,68 @@ callraytrace () {
     parallel_raytrace ../assets/$1.json ../assets/test_models/$2.obj ../assets/$3.json impulses/$1_$2_$3.aiff
 }
 
-# callraytrace near_c stonehenge            mat
-# callraytrace near_c bedroom               mat
-# callraytrace near_l stonehenge            mat
-# callraytrace near_l bedroom               mat
-# callraytrace near_r stonehenge            mat
-# callraytrace near_r bedroom               mat
-# callraytrace near_c random_pillars        mat
-# callraytrace near_l random_pillars        mat
-# callraytrace near_r random_pillars        mat
-# callraytrace medium random_pillars        mat
-# callraytrace medium stonehenge            mat
-# callraytrace far_2 random_pillars         mat
-# callraytrace far_2 stonehenge             mat
+callraytrace near_c stonehenge              mat
+callraytrace near_c bedroom                 mat
+callraytrace near_l stonehenge              mat
+callraytrace near_l bedroom                 mat
+callraytrace near_r stonehenge              mat
+callraytrace near_r bedroom                 mat
+callraytrace near_c random_pillars          mat
+callraytrace near_l random_pillars          mat
+callraytrace near_r random_pillars          mat
+callraytrace medium random_pillars          mat
+callraytrace medium stonehenge              mat
+callraytrace far_2 random_pillars           mat
+callraytrace far_2 stonehenge               mat
 
-# callraytrace near_c small_triangle          mat
-# callraytrace near_l small_triangle          mat
-# callraytrace near_r small_triangle          mat
-# callraytrace near_c small_square            mat
-# callraytrace near_l small_square            mat
-# callraytrace near_r small_square            mat
-# callraytrace near_c small_pentagon          mat
-# callraytrace near_l small_pentagon          mat
-# callraytrace near_r small_pentagon          mat
-# callraytrace near_c small_heptagon          mat
-# callraytrace near_l small_heptagon          mat
-# callraytrace near_r small_heptagon          mat
-# callraytrace near_c medium_triangle         mat
-# callraytrace near_l medium_triangle         mat
-# callraytrace near_r medium_triangle         mat
-# callraytrace near_c medium_square           mat
-# callraytrace near_l medium_square           mat
-# callraytrace near_r medium_square           mat
-# callraytrace near_c medium_pentagon         mat
-# callraytrace near_l medium_pentagon         mat
-# callraytrace near_r medium_pentagon         mat
-# callraytrace near_c medium_heptagon         mat
-# callraytrace near_l medium_heptagon         mat
-# callraytrace near_r medium_heptagon         mat
-# callraytrace near_c large_triangle          mat
-# callraytrace near_l large_triangle          mat
-# callraytrace near_r large_triangle          mat
-# callraytrace near_c large_square            mat
-# callraytrace near_l large_square            mat
-# callraytrace near_r large_square            mat
-# callraytrace near_c large_pentagon          mat
-# callraytrace near_l large_pentagon          mat
-# callraytrace near_r large_pentagon          mat
-# callraytrace near_c large_heptagon          mat
-# callraytrace near_l large_heptagon          mat
-# callraytrace near_r large_heptagon          mat
-# callraytrace medium medium_triangle         mat
-# callraytrace medium medium_square           mat
-# callraytrace medium medium_pentagon         mat
-# callraytrace medium medium_heptagon         mat
-# callraytrace medium large_triangle          mat
-# callraytrace medium large_square            mat
-# callraytrace medium large_pentagon          mat
-# callraytrace medium large_heptagon          mat
-# callraytrace far large_triangle             mat
-# callraytrace far large_square               mat
-# callraytrace far large_pentagon             mat
-# callraytrace far large_heptagon             mat
+callraytrace near_c small_triangle          mat
+callraytrace near_l small_triangle          mat
+callraytrace near_r small_triangle          mat
+callraytrace near_c small_square            mat
+callraytrace near_l small_square            mat
+callraytrace near_r small_square            mat
+callraytrace near_c small_pentagon          mat
+callraytrace near_l small_pentagon          mat
+callraytrace near_r small_pentagon          mat
+callraytrace near_c small_heptagon          mat
+callraytrace near_l small_heptagon          mat
+callraytrace near_r small_heptagon          mat
+callraytrace near_c medium_triangle         mat
+callraytrace near_l medium_triangle         mat
+callraytrace near_r medium_triangle         mat
+callraytrace near_c medium_square           mat
+callraytrace near_l medium_square           mat
+callraytrace near_r medium_square           mat
+callraytrace near_c medium_pentagon         mat
+callraytrace near_l medium_pentagon         mat
+callraytrace near_r medium_pentagon         mat
+callraytrace near_c medium_heptagon         mat
+callraytrace near_l medium_heptagon         mat
+callraytrace near_r medium_heptagon         mat
+callraytrace near_c large_triangle          mat
+callraytrace near_l large_triangle          mat
+callraytrace near_r large_triangle          mat
+callraytrace near_c large_square            mat
+callraytrace near_l large_square            mat
+callraytrace near_r large_square            mat
+callraytrace near_c large_pentagon          mat
+callraytrace near_l large_pentagon          mat
+callraytrace near_r large_pentagon          mat
+callraytrace near_c large_heptagon          mat
+callraytrace near_l large_heptagon          mat
+callraytrace near_r large_heptagon          mat
+callraytrace medium medium_triangle         mat
+callraytrace medium medium_square           mat
+callraytrace medium medium_pentagon         mat
+callraytrace medium medium_heptagon         mat
+callraytrace medium large_triangle          mat
+callraytrace medium large_square            mat
+callraytrace medium large_pentagon          mat
+callraytrace medium large_heptagon          mat
+callraytrace far large_triangle             mat
+callraytrace far large_square               mat
+callraytrace far large_pentagon             mat
+callraytrace far large_heptagon             mat
 
 callraytrace near_c small_triangle          damped
 callraytrace near_l small_triangle          damped
