@@ -8,9 +8,7 @@ parallel_raytrace - fast generator of raytraced impulse responses
 
 # SYNOPSIS
 
-```
 parallel_raytrace [configuration-file (.json)] [3D-object-file] [material-file (.json)] [output-file (.aiff)]
-```
 
 # DESCRIPTION
 
@@ -159,9 +157,10 @@ In addition, there are a variety of optional fields:
   corresponding to windowed-sinc, single-pass biquad, two-pass biquad, and
   linear-phase linkwitz-riley filtering.
 
-* *hipass* - Whether or not to apply a windowed-sinc hipass at 10Hz on the final
-  response.
-  This is mainly useful for removing DC bias.
+* *hipass* - The hipass cutoff frequency of the lowest frequency band.
+  Low frequency estimation is not very accurate with raytracing methods, so this
+  is a useful parameter for controlling the 'boominess' of the low-end, and for
+  removing DC bias.
 
 * *normalize* - Whether or not to normalize the output.
   Normally, you'll want normalization (so there's no clipping/distortion), but
@@ -212,7 +211,7 @@ An example configuration file is shown below:
         ]
     },
     "filter": "twopass",
-    "hipass": true,
+    "hipass": 30,
     "trim_predelay": true,
     "trim_tail": true,
     "output_mode": "all"

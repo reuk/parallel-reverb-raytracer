@@ -30,7 +30,7 @@ namespace TestsNamespace {
         Impulse constructImpulse (float x, float y, float z);
 
         vector <Impulse> in;
-        vector <Impulse> out;
+        vector <AttenuatedImpulse> out;
 
         default_random_engine generator;
         uniform_real_distribution <float> dist;

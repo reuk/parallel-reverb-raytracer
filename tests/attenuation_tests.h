@@ -53,7 +53,7 @@ namespace TestsNamespace {
         }
 
         vector <Impulse> in;
-        vector <Impulse> out;
+        vector <AttenuatedImpulse> out;
 
         default_random_engine generator;
         uniform_real_distribution <float> dist;

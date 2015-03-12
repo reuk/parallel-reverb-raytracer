@@ -3,12 +3,9 @@
 .PP
 parallel_raytrace \- fast generator of raytraced impulse responses
 .SH SYNOPSIS
-.IP
-.nf
-\f[C]
-parallel_raytrace\ [configuration\-file\ (.json)]\ [3D\-object\-file]\ [material\-file\ (.json)]\ [output\-file\ (.aiff)]
-\f[]
-.fi
+.PP
+parallel_raytrace [configuration\-file (.json)] [3D\-object\-file]
+[material\-file (.json)] [output\-file (.aiff)]
 .SH DESCRIPTION
 .SS Overview
 .PP
@@ -170,9 +167,11 @@ Valid values are \f[C]sinc\f[], \f[C]onepass\f[], \f[C]twopass\f[], and
 \f[C]linkwitz_riley\f[], corresponding to windowed\-sinc, single\-pass
 biquad, two\-pass biquad, and linear\-phase linkwitz\-riley filtering.
 .IP \[bu] 2
-\f[I]hipass\f[] \- Whether or not to apply a windowed\-sinc hipass at
-10Hz on the final response.
-This is mainly useful for removing DC bias.
+\f[I]hipass\f[] \- The hipass cutoff frequency of the lowest frequency
+band.
+Low frequency estimation is not very accurate with raytracing methods,
+so this is a useful parameter for controlling the \[aq]boominess\[aq] of
+the low\-end, and for removing DC bias.
 .IP \[bu] 2
 \f[I]normalize\f[] \- Whether or not to normalize the output.
 Normally, you\[aq]ll want normalization (so there\[aq]s no
@@ -230,7 +229,7 @@ An example configuration file is shown below:
 \ \ \ \ \ \ \ \ ]
 \ \ \ \ },
 \ \ \ \ "filter":\ "twopass",
-\ \ \ \ "hipass":\ true,
+\ \ \ \ "hipass":\ 30,
 \ \ \ \ "trim_predelay":\ true,
 \ \ \ \ "trim_tail":\ true,
 \ \ \ \ "output_mode":\ "all"

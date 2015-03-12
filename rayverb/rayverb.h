@@ -21,13 +21,13 @@
 /// which each subsequent item refers to the next sample of an impulse
 /// response.
 std::vector <std::vector <float>> flattenImpulses
-(   const std::vector <Impulse> & impulse
+(   const std::vector <AttenuatedImpulse> & impulse
 ,   float samplerate
 );
 
 /// Maps flattenImpulses over a vector of input vectors.
 std::vector <std::vector <std::vector <float>>> flattenImpulses
-(   const std::vector <std::vector <Impulse>> & impulse
+(   const std::vector <std::vector <AttenuatedImpulse>> & impulse
 ,   float samplerate
 );
 
@@ -37,7 +37,7 @@ std::vector <std::vector <float>> process
 ,   std::vector <std::vector <std::vector <float>>> & data
 ,   float sr
 ,   bool do_normalize
-,   bool do_hipass
+,   float lo_cutoff
 ,   bool do_trim_tail
 ,   float volumme_scale
 );
@@ -55,6 +55,7 @@ inline float max_amp (const T & t)
     );
 }
 
+/// The base case of the max_amp recursion.
 template<>
 inline float max_amp (const float & t)
 {
@@ -69,6 +70,7 @@ inline void div (T & ret, float f)
         div (i, f);
 }
 
+/// The base case of the div recursion.
 template<>
 inline void div (float & ret, float f)
 {
@@ -83,6 +85,7 @@ inline void mul (T & ret, float f)
         mul (i, f);
 }
 
+/// The base case of the mul recursion.
 template<>
 inline void mul (float & ret, float f)
 {
@@ -97,6 +100,8 @@ inline void normalize (std::vector <T> & ret)
     mul (ret, 1.0 / max_amp (ret));
 }
 
+/// Call binary operation u on pairs of elements from a and b, where a and b are
+/// cl_floatx types.
 template <typename T, typename U>
 inline T elementwise (const T & a, const T & b, const U & u)
 {
@@ -105,6 +110,8 @@ inline T elementwise (const T & a, const T & b, const U & u)
     return ret;
 }
 
+/// Recursively check a collection of Impulses for the earliest non-zero time of
+/// an impulse.
 template <typename T>
 inline float findPredelay (const T & ret)
 {
@@ -124,12 +131,15 @@ inline float findPredelay (const T & ret)
     );
 }
 
+/// The base case of the findPredelay recursion.
 template<>
-inline float findPredelay (const Impulse & i)
+inline float findPredelay (const AttenuatedImpulse & i)
 {
     return i.time;
 }
 
+/// Recursively subtract a time value from the time fields of a collection of
+/// Impulses.
 template <typename T>
 inline void fixPredelay (T & ret, float seconds)
 {
@@ -137,12 +147,14 @@ inline void fixPredelay (T & ret, float seconds)
         fixPredelay (i, seconds);
 }
 
+/// The base case of the fixPredelay recursion.
 template<>
-inline void fixPredelay (Impulse & ret, float seconds)
+inline void fixPredelay (AttenuatedImpulse & ret, float seconds)
 {
     ret.time = ret.time > seconds ? ret.time - seconds : 0;
 }
 
+/// Fixes predelay by finding and then removing predelay.
 template <typename T>
 inline void fixPredelay (T & ret)
 {
@@ -150,7 +162,7 @@ inline void fixPredelay (T & ret)
     fixPredelay (ret, predelay);
 }
 
-
+/// Class wrapping an OpenCL context.
 class ContextProvider
 {
 public:
@@ -159,6 +171,7 @@ public:
     cl::Context cl_context;
 };
 
+/// Builds a specific kernel and sets up a CommandQueue on an OpenCL context.
 class KernelLoader: public ContextProvider
 {
 public:
@@ -170,6 +183,9 @@ public:
     static const std::string KERNEL_STRING;
 };
 
+/// Raytraces are calculated in relation to a specific microphone position.
+/// This is a struct to keep the impulses and mic position together, because
+/// you'll probably never need one without the other.
 struct RaytracerResults
 {
     RaytracerResults() {}
@@ -182,9 +198,13 @@ struct RaytracerResults
     cl_float3 mic;
 };
 
+/// An exciting raytracer.
 class Raytracer: public KernelLoader
 {
 public:
+
+    /// If you don't want to use the built-in object loader, you can
+    /// initialise a raytracer with your own geometry here.
     Raytracer
     (   unsigned long nreflections
     ,   std::vector <Triangle> & triangles
@@ -193,6 +213,7 @@ public:
     ,   bool verbose
     );
 
+    /// Load a 3d model and materials from files.
     Raytracer
     (   unsigned long nreflections
     ,   const std::string & objpath
@@ -200,6 +221,7 @@ public:
     ,   bool verbose
     );
 
+    /// Run the raytrace with a specific mic, source, and set of directions.
     void raytrace
     (   const cl_float3 & micpos
     ,   const cl_float3 & source
@@ -207,13 +229,13 @@ public:
     ,   bool verbose
     );
 
-    /// Get raw, unprocessed diffuse impulses.
+    /// Get raw, unprocessed diffuse results.
     RaytracerResults getRawDiffuse();
 
-    /// Get raw, unprocessed image-source impulses.
+    /// Get raw, unprocessed image-source results.
     RaytracerResults getRawImages (bool removeDirect);
 
-    /// Get all raw, unprocessed impulses.
+    /// Get all raw, unprocessed results.
     RaytracerResults getAllRaw (bool removeDirect);
 
 private:
@@ -263,28 +285,34 @@ private:
     std::map <std::vector <unsigned long>, Impulse> imageSourceTally;
 };
 
+/// HRTF parameters.
 struct HrtfConfig
 {
     cl_float3 facing;
     cl_float3 up;
 };
 
+/// An attenuator is just a KernelLoader with some extra buffers.
 struct Attenuator: public KernelLoader
 {
     cl::Buffer cl_in;
     cl::Buffer cl_out;
 };
 
+/// Class for parallel HRTF attenuation of raytrace results.
 class HrtfAttenuator: public Attenuator
 {
 public:
     HrtfAttenuator();
 
-    std::vector <std::vector <Impulse>> attenuate
+    /// Attenuate some raytrace results.
+    /// The outer vector corresponds to separate channels, the inner vector
+    /// contains the impulses, each of which has a time and an 8-band volume.
+    std::vector <std::vector <AttenuatedImpulse>> attenuate
     (   const RaytracerResults & results
     ,   const HrtfConfig & config
     );
-    std::vector <std::vector <Impulse>> attenuate
+    std::vector <std::vector <AttenuatedImpulse>> attenuate
     (   const RaytracerResults & results
     ,   const cl_float3 & facing
     ,   const cl_float3 & up
@@ -293,7 +321,7 @@ public:
     virtual const std::array <std::array <std::array <cl_float8, 180>, 360>, 2> & getHrtfData() const;
 private:
     static const std::array <std::array <std::array <cl_float8, 180>, 360>, 2> HRTF_DATA;
-    std::vector <Impulse> attenuate
+    std::vector <AttenuatedImpulse> attenuate
     (   const cl_float3 & mic_pos
     ,   unsigned long channel
     ,   const cl_float3 & facing
@@ -316,16 +344,21 @@ private:
     ) attenuate_kernel;
 };
 
+/// Class for parallel Speaker attenuation of raytrace results.
 class SpeakerAttenuator: public Attenuator
 {
 public:
     SpeakerAttenuator();
-    std::vector <std::vector <Impulse>> attenuate
+
+    /// Attenuate some raytrace results.
+    /// The outer vector corresponds to separate channels, the inner vector
+    /// contains the impulses, each of which has a time and an 8-band volume.
+    std::vector <std::vector <AttenuatedImpulse>> attenuate
     (   const RaytracerResults & results
     ,   const std::vector <Speaker> & speakers
     );
 private:
-    std::vector <Impulse> attenuate
+    std::vector <AttenuatedImpulse> attenuate
     (   const cl_float3 & mic_pos
     ,   const Speaker & speaker
     ,   const std::vector <Impulse> & impulses

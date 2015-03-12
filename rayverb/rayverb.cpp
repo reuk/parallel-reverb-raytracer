@@ -26,7 +26,7 @@ inline cl_float3 fromAIVec (const aiVector3D & v)
 }
 
 vector <vector <vector <float>>> flattenImpulses
-(   const vector <vector <Impulse>> & attenuated
+(   const vector <vector <AttenuatedImpulse>> & attenuated
 ,   float samplerate
 )
 {
@@ -44,7 +44,7 @@ vector <vector <vector <float>>> flattenImpulses
 }
 
 vector <vector <float>> flattenImpulses
-(   const vector <Impulse> & impulse
+(   const vector <AttenuatedImpulse> & impulse
 ,   float samplerate
 )
 {
@@ -131,22 +131,14 @@ vector <vector <float>> process
 ,   vector <vector <vector <float>>> & data
 ,   float sr
 ,   bool do_normalize
-,   bool do_hipass
+,   float lo_cutoff
 ,   bool do_trim_tail
 ,   float volume_scale
 )
 {
-    RayverbFiltering::filter (filtertype, data, sr);
+    RayverbFiltering::filter (filtertype, data, sr, lo_cutoff);
     vector <vector <float>> ret (data.size());
     transform (data.begin(), data.end(), ret.begin(), mixdown);
-
-    if (do_hipass)
-    {
-        RayverbFiltering::HipassWindowedSinc hp (ret.front().size());
-        hp.setParams (1, sr);
-        for (auto && i : ret)
-            hp.filter (i);
-    }
 
     if (do_normalize)
         normalize (ret);
@@ -705,7 +697,7 @@ HrtfAttenuator::HrtfAttenuator()
 
 }
 
-vector <vector <Impulse>> HrtfAttenuator::attenuate
+vector <vector <AttenuatedImpulse>> HrtfAttenuator::attenuate
 (   const RaytracerResults & results
 ,   const HrtfConfig & config
 )
@@ -713,14 +705,14 @@ vector <vector <Impulse>> HrtfAttenuator::attenuate
     return attenuate (results, config.facing, config.up);
 }
 
-vector <vector <Impulse>> HrtfAttenuator::attenuate
+vector <vector <AttenuatedImpulse>> HrtfAttenuator::attenuate
 (   const RaytracerResults & results
 ,   const cl_float3 & facing
 ,   const cl_float3 & up
 )
 {
     auto channels = {0, 1};
-    vector <vector <Impulse>> attenuated (channels.size());
+    vector <vector <AttenuatedImpulse>> attenuated (channels.size());
     transform
     (   begin (channels)
     ,   end (channels)
@@ -733,7 +725,7 @@ vector <vector <Impulse>> HrtfAttenuator::attenuate
     return attenuated;
 }
 
-vector <Impulse> HrtfAttenuator::attenuate
+vector <AttenuatedImpulse> HrtfAttenuator::attenuate
 (   const cl_float3 & mic_pos
 ,   unsigned long channel
 ,   const cl_float3 & facing
@@ -759,7 +751,7 @@ vector <Impulse> HrtfAttenuator::attenuate
     cl_out = cl::Buffer
     (   cl_context
     ,   CL_MEM_READ_WRITE
-    ,   impulses.size() * sizeof (Impulse)
+    ,   impulses.size() * sizeof (AttenuatedImpulse)
     );
 
     cl::copy (queue, impulses.begin(), impulses.end(), cl_in);
@@ -773,7 +765,7 @@ vector <Impulse> HrtfAttenuator::attenuate
     ,   up
     ,   channel
     );
-    vector <Impulse> ret (impulses.size());
+    vector <AttenuatedImpulse> ret (impulses.size());
     cl::copy (queue, cl_out, ret.begin(), ret.end());
     return ret;
 }
@@ -796,12 +788,12 @@ SpeakerAttenuator::SpeakerAttenuator()
 
 }
 
-vector <vector <Impulse>> SpeakerAttenuator::attenuate
+vector <vector <AttenuatedImpulse>> SpeakerAttenuator::attenuate
 (   const RaytracerResults & results
 ,   const vector <Speaker> & speakers
 )
 {
-    vector <vector <Impulse>> attenuated (speakers.size());
+    vector <vector <AttenuatedImpulse>> attenuated (speakers.size());
     transform
     (   begin (speakers)
     ,   end (speakers)
@@ -814,7 +806,7 @@ vector <vector <Impulse>> SpeakerAttenuator::attenuate
     return attenuated;
 }
 
-vector <Impulse> SpeakerAttenuator::attenuate
+vector <AttenuatedImpulse> SpeakerAttenuator::attenuate
 (   const cl_float3 & mic_pos
 ,   const Speaker & speaker
 ,   const vector <Impulse> & impulses
@@ -828,7 +820,7 @@ vector <Impulse> SpeakerAttenuator::attenuate
     cl_out = cl::Buffer
     (   cl_context
     ,   CL_MEM_READ_WRITE
-    ,   impulses.size() * sizeof (Impulse)
+    ,   impulses.size() * sizeof (AttenuatedImpulse)
     );
 
     cl::copy (queue, impulses.begin(), impulses.end(), cl_in);
@@ -839,7 +831,7 @@ vector <Impulse> SpeakerAttenuator::attenuate
     ,   cl_out
     ,   speaker
     );
-    vector <Impulse> ret (impulses.size());
+    vector <AttenuatedImpulse> ret (impulses.size());
     cl::copy (queue, cl_out, ret.begin(), ret.end());
     return ret;
 }

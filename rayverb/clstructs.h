@@ -41,6 +41,13 @@ typedef struct  {
 
 typedef _Impulse_unalign __attribute__ ((aligned(8))) Impulse;
 
+typedef struct  {
+    VolumeType volume;
+    cl_float time;
+} _AttenuatedImpulse_unalign;
+
+typedef _AttenuatedImpulse_unalign __attribute__ ((aligned(8))) AttenuatedImpulse;
+
 /// Each speaker has a (normalized-unit) direction, and a coefficient in the
 /// range 0-1 which describes its polar pattern from omni to bidirectional.
 typedef struct  {

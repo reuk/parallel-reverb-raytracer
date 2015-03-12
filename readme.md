@@ -109,12 +109,14 @@ to do
 [?] fix bottom-band filtering
     * where should the bottom cutoff be? 45Hz maybe?
     * what sounds good?
-    * check damping coefficients - make some nice-sounding ones
+[x] attenuators should probably return a trimmed-down impulse type
+[x] remove universal hipass filtering, instead supply a way of changing the bottom-band hipass cutoff
+[x] document the actual code - comments!
 
+[ ] check how portable the software is
 [ ] add brdf
 [ ] generate final samples
-[ ] document the actual code - comments!
-[ ] check how portable the software is
+    * check damping coefficients - make some nice-sounding ones
 [ ] why no comb filtering in square rooms?
 [ ] compare results to commercial software
 

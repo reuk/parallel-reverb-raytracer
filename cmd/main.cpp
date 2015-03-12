@@ -144,7 +144,7 @@ int main(int argc, const char * argv[])
 
     //  optional params
     auto filter = RayverbFiltering::FILTER_TYPE_BIQUAD_ONEPASS;
-    auto hipass = false;
+    auto hipass = 45.0;
     auto normalize = true;
     auto volumme_scale = 1.0;
     auto trim_predelay = false;
@@ -237,7 +237,7 @@ int main(int argc, const char * argv[])
     }
 
     auto directions = getRandomDirections (numRays);
-    vector <vector <Impulse>> attenuated;
+    vector <vector <AttenuatedImpulse>> attenuated;
     try
     {
         Raytracer raytracer

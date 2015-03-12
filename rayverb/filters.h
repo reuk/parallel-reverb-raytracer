@@ -14,6 +14,7 @@ namespace RayverbFiltering
 {
     using namespace std;
 
+    /// Interface for the most generic boring filter.
     class Filter
     {
     public:
@@ -21,9 +22,11 @@ namespace RayverbFiltering
         virtual void filter (vector <float> & data) = 0;
     };
 
+    /// Interface for a plain boring hipass filter.
     class Hipass: public Filter
     {
     public:
+        /// A hipass has mutable cutoff and samplerate.
         virtual void setParams (float co, float s);
         float cutoff, sr;
     };
@@ -32,16 +35,23 @@ namespace RayverbFiltering
     class Bandpass: public Filter
     {
     public:
+        /// A hipass has mutable lopass, hipass, and samplerate.
         virtual void setParams (float l, float h, float s);
         float lo, hi, sr;
     };
 
+    /// Performs the fastest offline convolution using fft wizardry.
     class FastConvolution
     {
     public:
+
+        /// An fftconvolover has a constant length.
+        /// This means you can reuse it for lots of different convolutions
+        /// without reallocating memory, as long as they're all the same size.
         FastConvolution (unsigned long FFT_LENGTH);
         virtual ~FastConvolution();
 
+        /// Convolve two data structures stogether.
         template <typename T, typename U>
         vector <float> convolve
         (   const T & a
@@ -99,11 +109,13 @@ namespace RayverbFiltering
         fftwf_plan c2r;
     };
 
+    /// An interesting windowed-sinc hipass filter.
     class HipassWindowedSinc: public Hipass, public FastConvolution
     {
     public:
         HipassWindowedSinc (unsigned long inputLength);
 
+        /// Filter a vector of data.
         virtual void filter (vector <float> & data);
         virtual void setParams (float co, float s);
     private:
@@ -134,11 +146,16 @@ namespace RayverbFiltering
         array <float, KERNEL_LENGTH> kernel;
     };
 
+    /// A super-simple biquad filter.
     class Biquad
     {
     public:
+        /// Run the filter foward over some data.
         void onepass (vector <float> & data);
+
+        /// Run the filter forward then backward over some data.
         void twopass (vector <float> & data);
+
         void setParams
         (   double b0
         ,   double b1
@@ -158,11 +175,14 @@ namespace RayverbFiltering
         void filter (vector <float> & data);
     };
 
+    /// Simple biquad bandpass filter.
     class TwopassBandpassBiquad: public OnepassBandpassBiquad
     {
         void filter (vector <float> & data);
     };
 
+    /// A linkwitz-riley filter is just a linear-phase lopass and hipass
+    /// coupled together.
     class LinkwitzRiley: public Bandpass
     {
     public:
@@ -186,5 +206,6 @@ namespace RayverbFiltering
     (   FilterType ft
     ,   vector <vector <vector <float>>> & data
     ,   float sr
+    ,   float lo_cutoff
     );
 }

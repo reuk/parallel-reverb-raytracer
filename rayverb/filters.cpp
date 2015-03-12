@@ -254,6 +254,7 @@ void RayverbFiltering::filter
 (   FilterType ft
 ,   vector <vector <vector <float>>> & data
 ,   float sr
+,   float lo_cutoff
 )
 {
     unique_ptr <Bandpass> bp;
@@ -277,8 +278,7 @@ void RayverbFiltering::filter
     for (auto && channel : data)
     {
         const vector <float> EDGES
-//            ({90, 175, 350, 700, 1400, 2800, 5600, 11200, 20000});
-            ({45, 175, 350, 700, 1400, 2800, 5600, 11200, 20000});
+            ({lo_cutoff, 175, 350, 700, 1400, 2800, 5600, 11200, 20000});
 
         for (auto i = 0; i != channel.size(); ++i)
         {

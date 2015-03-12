@@ -12,7 +12,6 @@
         ]
     },
     "filter": "linkwitz_riley",
-    "hipass": false,
     "trim_predelay": true,
     "trim_tail": true,
     "output_mode": "all"

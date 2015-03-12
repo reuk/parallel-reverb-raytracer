@@ -44,6 +44,11 @@ typedef struct {
 } Impulse;
 
 typedef struct {
+    VolumeType volume;
+    float time;
+} AttenuatedImpulse;
+
+typedef struct {
     float3 direction;
     float coefficient;
 } Speaker;
@@ -510,7 +515,7 @@ float speaker_attenuation (Speaker * speaker, float3 direction)
 kernel void attenuate
 (   float3 mic_pos
 ,   global Impulse * impulsesIn
-,   global Impulse * impulsesOut
+,   global AttenuatedImpulse * impulsesOut
 ,   Speaker speaker
 )
 {
@@ -522,9 +527,8 @@ kernel void attenuate
         (   &speaker
         ,   getDirection (mic_pos, thisImpulse->position)
         );
-        impulsesOut [i] = (Impulse)
+        impulsesOut [i] = (AttenuatedImpulse)
         {   thisImpulse->volume * ATTENUATION
-        ,   thisImpulse->position
         ,   thisImpulse->time
         };
     }
@@ -582,7 +586,7 @@ VolumeType hrtf_attenuation
 kernel void hrtf
 (   float3 mic_pos
 ,   global Impulse * impulsesIn
-,   global Impulse * impulsesOut
+,   global AttenuatedImpulse * impulsesOut
 ,   global VolumeType * hrtfData
 ,   float3 pointing
 ,   float3 up
@@ -613,9 +617,8 @@ kernel void hrtf
         const float dist1 = distance (thisImpulse->position, ear_pos);
         const float diff = dist1 - dist0;
 
-        impulsesOut [i] = (Impulse)
+        impulsesOut [i] = (AttenuatedImpulse)
         {   thisImpulse->volume * ATTENUATION
-        ,   thisImpulse->position
         ,   thisImpulse->time + diff * SECONDS_PER_METER
         };
     }
