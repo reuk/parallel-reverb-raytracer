@@ -12,18 +12,9 @@ include_directories(
 set(name parallel_raytrace)
 set(sources main.cpp)
 
-find_library(opencl_library OpenCL)
-mark_as_advanced(opencl_library)
-set(frameworks ${opencl_library})
-
-set(libraries rayverb assimp fftw3f sndfile ${frameworks})
-
 add_executable(${name} ${sources})
 
-target_link_libraries(${name} ${libraries})
+target_link_libraries(${name} rayverb)
 
-install(TARGETS ${name}
-    RUNTIME DESTINATION bin
-)
-
+install(TARGETS ${name} RUNTIME DESTINATION bin)
 install(FILES parallel_raytrace.1 DESTINATION /usr/share/man/man1)

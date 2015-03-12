@@ -9,12 +9,23 @@
 #include <stdexcept>
 #include <map>
 
+/// This file contains a set of classes which serve to form a layer over the
+/// rapidjson parser, which can easily be used to validate and read json
+/// fields into specific types.
+/// To validate a specific type, just add a specialization of JsonGetter<>
+/// for the type that you want to validate.
+
+/// Different components of the output impulse.
 enum OutputMode
 {   ALL
 ,   IMAGE_ONLY
 ,   DIFFUSE_ONLY
 };
 
+/// Describes the attenuation model that should be used to attenuate a raytrace.
+/// There's probably a more elegant (runtime-polymorphic) way of doing this that
+/// doesn't require both the HrtfConfig and the vector <Speaker> to be present
+/// in the object at the same time.
 struct AttenuationModel
 {
     enum Mode
@@ -26,8 +37,10 @@ struct AttenuationModel
     std::vector <Speaker> speakers;
 };
 
+/// A simple interface for a JsonValidator.
 struct JsonValidatorBase
 {
+    /// Overload to dictate what happens when a JsonValidator is Run on a Value
     virtual void run (const rapidjson::Value & value) const = 0;
 };
 
@@ -36,6 +49,11 @@ struct RequiredValidator;
 
 template <typename T, typename U> struct JsonValidator;
 
+/// Class used to register required and optional fields that should be present
+/// in a config file.
+/// Also has the ability to parse a value for these required and optional
+/// fields.
+/// You almost definitely want an instance of THIS CLASS rather than any other.
 class ConfigValidator
 {
 public:
@@ -61,10 +79,12 @@ private:
     std::vector <std::unique_ptr <JsonValidatorBase>> validators;
 };
 
-
+/// This is basically just an immutable string.
 struct StringWrapper
 {
     StringWrapper (const std::string & s): s (s) {}
+    const std::string & getString() const {return s;}
+private:
     const std::string & s;
 };
 
@@ -79,8 +99,8 @@ struct RequiredValidator: public Validator
     RequiredValidator (const std::string & s): Validator (s) {}
     bool validate (const rapidjson::Value & value) const
     {
-        if (! value.HasMember (s.c_str()))
-            throw std::runtime_error ("key " + s + " not found in config object");
+        if (! value.HasMember (getString().c_str()))
+            throw std::runtime_error ("key " + getString() + " not found in config object");
         return true;
     }
 };
@@ -90,7 +110,7 @@ struct OptionalValidator: public Validator
     OptionalValidator (const std::string & s): Validator (s) {}
     bool validate (const rapidjson::Value & value) const
     {
-        return value.HasMember (s.c_str());
+        return value.HasMember (getString().c_str());
     }
 };
 
@@ -435,11 +455,11 @@ struct JsonValidator: public JsonValidatorBase, public JsonGetter <T>, public U
     {
         if (U::validate (value))
         {
-            if (! JsonGetter<T>::check (value [U::s.c_str()]))
+            if (! JsonGetter<T>::check (value [U::getString().c_str()]))
             {
-                throw std::runtime_error ("invalid value for key " + U::s);
+                throw std::runtime_error ("invalid value for key " + U::getString());
             }
-            JsonGetter<T>::get (value [U::s.c_str()]);
+            JsonGetter<T>::get (value [U::getString().c_str()]);
         }
     }
 };

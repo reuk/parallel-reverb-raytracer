@@ -1,5 +1,5 @@
 CUSTOM_FILE_0 := report.md.pdf
-CUSTOM_FLAGS_0 := --csl=apa.csl --bibliography=bib.bib -H config.sty
+CUSTOM_FLAGS_0 := --csl=apa.csl --bibliography=bib.bib -H config.sty -V papersize:"a4paper"
 
 PDFS := $(patsubst %.md,%.md.pdf,$(wildcard *.md))
 

@@ -106,16 +106,14 @@ to do
     * ignored by rober, kaminski and masuch
 [x] deduce output filetype from extension?
 [x] is there echo in long rooms?
-
-[ ] add brdf
-
 [?] fix bottom-band filtering
     * where should the bottom cutoff be? 45Hz maybe?
     * what sounds good?
     * check damping coefficients - make some nice-sounding ones
 
+[ ] add brdf
+[ ] generate final samples
 [ ] document the actual code - comments!
-
 [ ] check how portable the software is
 [ ] why no comb filtering in square rooms?
 [ ] compare results to commercial software
