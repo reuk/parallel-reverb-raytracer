@@ -17,8 +17,5 @@ set(frameworks ${opencl_library})
 set(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
 find_library(assimp_library assimp)
 find_library(fftw3f_library fftw3f)
-find_library(sndfile_library sndfile)
 
-set(libraries rayverb ${assimp_library} ${fftw3f_library} ${sndfile_library} z ${frameworks})
-
-target_link_libraries(${name} ${libraries})
+target_link_libraries(${name} rayverb ${assimp_library} z ${fftw3f_library} ${frameworks})

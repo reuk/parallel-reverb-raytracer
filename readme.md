@@ -114,6 +114,8 @@ to do
 [x] document the actual code - comments!
 
 [ ] check how portable the software is
+    * **IMPORTANT**: I probably have to build the LIBRARIES I'm using for the
+      correct deployment target, as well as program itself
 [ ] add brdf
 [ ] generate final samples
     * check damping coefficients - make some nice-sounding ones
@@ -127,3 +129,9 @@ Documentation
 * examples!
 
 This week - 2/3 audio evaluation and fixing, 1/3 report
+
+TALK ABOUT
+==========
+
+* what system will the program be run on? integrated graphcis?
+* can we try the program on that system?

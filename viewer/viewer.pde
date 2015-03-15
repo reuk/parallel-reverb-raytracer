@@ -1,6 +1,7 @@
 import saito.objloader.*;
 import org.json.*;
 import peasy.*;
+import processing.pdf.*;
 
 OBJModel model;
 PeasyCam cam;
@@ -32,9 +33,9 @@ void setup()
   
   rotateZ(PI / 2);
   
-  model = new OBJModel (this, "/Users/reuben/dev/parallel_raytrace/assets/test_models/bedroom.obj");
+  model = new OBJModel (this, "/Users/reuben/dev/parallel_raytrace/assets/test_models/random_pillars.obj");
   
-  JSONObject config_json = loadJSONObject ("../assets/bedroom.json");
+  JSONObject config_json = loadJSONObject ("../assets/far.json");
   JSONArray s_pos = config_json.getJSONArray ("source_position");
   JSONArray m_pos = config_json.getJSONArray ("mic_position");
   
@@ -56,7 +57,7 @@ void setup()
       {
         JSON vec = json.getJSON (i).getJSON ("position");
         PVector pvec = new PVector (vec.getFloat (0), -vec.getFloat (1), vec.getFloat (2));
-        list.add (new Intersection (pvec, json.getJSON (i).getFloat ("volume")));
+        list.add (new Intersection (pvec, abs (json.getJSON (i).getFloat ("volume"))));
       }
 
       trace.add (list);
@@ -99,8 +100,15 @@ void mousePressed()
   doFill = !doFill;
 }
 
+boolean record = false;
+
 void draw()
 {
+  if (record)
+  {
+    beginRaw(PDF, "render.pdf");
+  }
+  
   lights();
   background (0.5);
 //  scale (8);
@@ -171,4 +179,18 @@ void draw()
   endShape();
     
 //  saveFrame ("out-###.png");
+
+  if (record)
+  {
+    endRaw();
+    record = false;
+  }
+}
+
+void keyPressed()
+{
+  if (key == ' ')
+  {
+    record = true;
+  }
 }

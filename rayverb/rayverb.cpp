@@ -634,6 +634,12 @@ void Raytracer::raytrace
                     {
                         imageSourceTally [surfaces] = image [j + k - 1];
                     }
+#ifdef DIAGNOSTIC
+                    else
+                    {
+                        cout << it->second.time << " " << image [j + k - 1].time << endl;
+                    }
+#endif
                 }
             }
         }

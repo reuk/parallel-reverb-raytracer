@@ -56,9 +56,14 @@ value.
 The algorithm takes advantage of the 'embarrassing parallelism' of raytracing by
 carrying out the main raytrace on the GPU rather than the CPU.
 
+The algorithm starts by tracing a number of rays.
 Each ray is shot in a straight line, in a random direction, from the
 `source_position`.
+
+To model frequency-dependent attenuation, each ray has 8 'volume' components
+corresponding to amplitudes in 8 octave bands.
 Each ray starts with a volume of '1' in all 8 frequency bands.
+
 When a ray intersects with a piece of geometry (or *primitive*) in the scene,
 the material of that primitive is checked.
 A new volume is calculated by multiplying the current volume of the ray by the
@@ -66,17 +71,21 @@ specular coefficients of the material.
 Then, a new ray is cast back from the intersection point to the `mic_position`.
 If this new ray intersects with the `mic_position`, then the mic is 'visible'
 from the intersection point, and a diffuse contribution is added to the output.
-The volume of this diffuse contribution is calculated by multiplying the ray
-volume by the diffuse coefficients of the material, and then correcting for air
-attenuation (that is, energy lost to the air as the ray travels through it) and
-angle of reflection (direct reflections contribute more than reflections in
-other directions).
+
+The volume of the diffuse contribution is calculated by multiplying the ray
+volume by the diffuse coefficients of the material.
+Then, the volume is corrected for air attenuation, that is, energy lost to the
+air as a function of total distance the ray has travelled.
+Lambert's cosine law is also used to attenuate the diffuse contribution
+depending on the incident angle of the ray, so that direct reflections
+contribute more than reflections in other directions.
+
 The contribution time is calculated by dividing the total distance travelled
 by the ray by the speed of sound.
 Then, a new ray is cast, perfectly reflected from the intersection point.
-The process is repeated with this new ray.
-In this way, the process continues until the maximum number of reflections,
-`reflections`, has been reached.
+The whole process is repeated with this new ray.
+In this way, the process continues until a maximum number of reflections has
+been reached.
 
 For early reflections, an additional method is used to calculate contributions.
 When a ray intersects with a primitive, the microphone position is reflected
@@ -93,6 +102,23 @@ The completed raytrace produces a collection of 'Impulses', each of which
 has an 8-band volume, a position, and a time.
 These impulses are attenuated depending on their direction from the microphone,
 using either polar-pattern or HRTF coefficients.
+
+The 'speaker' (polar-pattern) attenuation model multiplies the amplitude of each
+Impulse by a polar pattern defined by the facing-direction of a virtual
+microphone capsule and a 'shape' coefficient.
+
+The 'HRTF' attenuation model checks the difference between the direction in
+which a virtual head is facing, and the direction from the head position to the
+Impulse's position.
+It calculates the azimuth and elevation of the Impulse direction relative to the
+head, then uses these values to look up suitable attenuation coefficients in a
+table.
+It also adjusts the time of the Impulse based on the impulse position, so that
+if the impulse arrived from the left side, it appears in the left channel before
+the right.
+Currently, the attenuation coefficient table is hard-coded into the program,
+though a future update may allow the coefficients to be chosen at run-time.
+
 After attenuation, each band is filtered, and then the bands are summed
 together to produce a single full-spectrum response.
 This response can optionally be normalized, volume-scaled, and trimmed.

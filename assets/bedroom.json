@@ -12,7 +12,6 @@
         ]
     },
     "filter": "twopass",
-    "hipass": true,
     "trim_predelay": true,
     "output_mode": "all"
 }
