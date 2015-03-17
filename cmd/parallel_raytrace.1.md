@@ -14,42 +14,46 @@ parallel_raytrace [configuration-file (.json)] [3D-object-file] [material-file (
 
 ## Overview
 
-Parallel_raytrace generates impulse responses of 3D models, using raytracing
-techniques.
+Parallel_raytrace is a physically-modelling reverb.
+It generates impulse responses of 3D models, using raytracing techniques.
+These responses can be used with convolution reverb packages such as Alitverb
+or Space Designer.
 
-The program takes three input files.
+The program takes three input files, and the name of an output file.
 Descriptions of these are given below, with valid fields and examples under
 'FILE FORMATS':
 
-The first, the configuration-file, provides all the vital information, such
-as the positions of sources and microphones, and speaker configurations,
-along with any optional flags.
-This file should be a valid JSON-formatted document.
-Using JSON allows for passing structured data to the program, which is
-necessary for defining speaker and hrtf configurations.
+* The *configuration-file* provides all the vital information, such
+  as the positions of sources and microphones, and speaker configurations,
+  along with any optional flags.
+  This file should be a valid JSON-formatted document.
+  (For more information about JSON check the [official website at json.org](http://json.org).
+  JSON files can be created in any plain-text editor.)
+  Using JSON allows for passing structured data to the program, which is
+  necessary for defining speaker and hrtf configurations.
 
-The second, the 3D object file, is the model that will actually be traced.
-Parallel_raytrace uses the Assimp library for object input, and therefore
-supports a variety of different 3D formats, including Collada (.dae),
-Blender 3D (.blend), 3ds Max 3DS (.3ds), and Wavefront Object (.obj).
-A full list is available at [the Assimp website](http://assimp.sourceforge.net/main_features_formats.html).
+* The *3D-object-file* is the model that will actually be traced.
+  Parallel_raytrace uses the Assimp library for object input, and therefore
+  supports a variety of different 3D formats, including Collada (.dae),
+  Blender 3D (.blend), 3ds Max 3DS (.3ds), and Wavefront Object (.obj).
+  A full list is available at [the Assimp website](http://assimp.sourceforge.net/main_features_formats.html).
 
-Thirdly, the material file defines the specular and diffuse coefficients of
-the various materials in the scene.
-Each material in the 3D model should have an entry with the same name in the
-material file.
-For the .obj format this is easy, as all the model's materials are saved to
-a separate .mtl file.
-You can just check this .mtl for the material names, and add appropriate
-materials to the material file.
+* The *material-file* defines the specular and diffuse coefficients of
+  the various materials in the scene.
+  Each material in the 3D model should have an entry with the same name in the
+  material file.
+  For the .obj format this is easy, as all the model's materials are saved to
+  a separate .mtl file.
+  You can just check this .mtl for the material names, and add appropriate
+  materials to the material file.
 
-Finally, the output file is the impulse response file that will be written.
-The filetype will be deduced from the extension of the filename that is
-provided.
-Valid extensions are `.aif`, `.aiff`, and `.wav`.
-The bitdepth and samplerate can be specified in the config file.
-The bitdepth must be either 16 or 24 bits, but the sampling rate can take any
-value.
+* The *output-file* is the impulse response file that will be written.
+  The filetype will be deduced from the extension of the filename that is
+  provided.
+  Valid extensions are `.aif`, `.aiff`, and `.wav`.
+  The bitdepth and samplerate can be specified in the config file.
+  The bitdepth must be either 16 or 24 bits, but the sampling rate can take any
+  value.
 
 ## Algorithm Description
 

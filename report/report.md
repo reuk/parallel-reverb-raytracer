@@ -5,12 +5,26 @@ Introduction
 ============
 
 The goal of this project was to produce a piece of software which could
-efficiently synthesize high-quality impulse responses for virtual environments.
-The software had to run on commodity hardware, available to most musicians,
-while also producing high-quality output at a reasonable speed.
+efficiently synthesize high-quality impulse responses for virtual environments,
+using some kind of physical modelling method.
 In addition, the software had to be capable of rendering impulses suitable for
 basic auralisation, using head-related transfer-function (HRTF) based
-techniques.
+techniques to produce simple binaural room impulse responses (BRIR).
+
+Reverbs are a staple of the electronic musician's toolkit, but some composers
+wish to add a specific sense of space to their music which is often not possible
+with conventional feedback-delay-network reverbs.
+The premise for this project is simple: if a composer has a 3D model of a room
+or space, they should be able to place their musical material inside this space.
+
+The software solution runs on commodity hardware, available to most
+musicians, while also producing high-quality output at a reasonable speed.
+Much of the prior art in this field focuses on interactivity at the expense of
+quality, and softare implementations are awkward to set up and use, if they are
+even available to the general public.
+This project aimed to address these issues by creating an offline reverb with an
+emphasis on quality rather than speed, and by making it straightforward to
+execute the program.
 
 Literature Review
 =================
@@ -18,7 +32,7 @@ Literature Review
 Many different implementations of modelling reverbs exist.
 Some of these are commercially available, for example the Odeon family of room
 acoustics software (discussed in @rindel2000), and the Catt-Acoustic program
-(@dalenback2010).
+[@dalenback2010].
 Many more exist only as research projects without commercial implementations -
 the programs described by @rober2007, @savioja2002, @schissler2014 and
 @taylor2012 (to name a few) do not appear to be available in any form to the
@@ -38,7 +52,7 @@ some kind of ray-casting.
 In these models, sound is supposed to act as a ray rather than a wave.
 This representation is well suited to high frequency sounds, but is unable
 to take the sound wavelength into account, often leading to overly accurate
-higher-order reflections (@rindel2000).
+higher-order reflections [@rindel2000].
 These methods also often ignore wave effects such as interference or diffusion.
 
 The most common stochastic method is ray tracing, which has two main benefits:
@@ -47,7 +61,7 @@ research into graphical ray tracing methods.
 Secondly, ray tracing is an 'embarrassingly parallel' algorithm, meaning that
 it can easily be distributed across many processors simultaneously, as there is
 no need for signalling between algorithm instances, and there is only a single
-'final gather' (@stephens2013).
+'final gather' [@stephens2013].
 
 A common deterministic method is the image-source method.
 This algorithm is conceptually very simple, and therefore fairly straightforward
@@ -149,8 +163,8 @@ ray tracing.
 Implementation
 ==============
 
-Basic Algorithm Choices
------------------------
+Key Decisions
+-------------
 
 For this project, an off line ray tracing algorithm was chosen, which was
 later adapted into a hybrid ray tracing/image-source model.
@@ -228,25 +242,19 @@ at which the ray is reflected.
 
 ![A simple overview of the algorithm \label{algo_over}](algorithm_overview.pdf)
 
-<!-- add a number 5 with just the single room? -->
-
 Technologies and Libraries
 --------------------------
 
-The code for the project was written mostly in C++, taking advantage of many
-modern C++ features.
-C++ was chosen as it marked an acceptable compromise between performance and
-ease of development.
-The majority of the project was written for the C++11 standard, which provides
-many features that make code simpler, faster to write, and in many cases
-more efficient too.
-Towards the end of the project, the project was moved to C++14, which is
-supported on newer versions of OS X.
-This standard additionally provides generic lambda expressions, which make it
-easier to write flexible, reusable code.
+The code for the project was written mostly in C++, which was chosen as it
+marked an acceptable compromise between performance and ease of development.
+The majority of the project was written for the C++11 standard, but later it was
+changed to target C++14, which is supported on newer versions of OS X.
+The main benefit of C++14 over older C++ standards is the much improved type
+system, which makes it much easier to write generic, reusable, and type-safe
+code.
 
 All GPU code was written for OpenCL 1.2, which was chosen for its increased
-portability over CUDA (which only runs on Nvidia hardware), and its
+portability compared to CUDA (which only runs on Nvidia hardware), and its
 'general purpose-ness' - OpenCL is designed for general-purpose computation,
 whereas shader-language alternatives are designed specifically for graphics
 processing.
@@ -262,31 +270,31 @@ in order to run OpenCL code.
 
 Several additional libraries were used to speed the development of the program:
 
-The Assimp library was used for loading and processing of 3D model files.
-This library loads a variety of formats into a single universal data structure
-which can be queried in a consistent way.
-This allows the program to support a wide range of input formats.
+* *Assimp* - used for loading and processing of 3D model files.
+  This library loads a variety of formats into a single universal data structure
+  which can be queried in a consistent way.
+  This allows the program to support a wide range of input formats.
 
-FFTW3 was used for efficient fast Fourier transforms (FFTs), required for
-windowed-sinc filtering by convolution.
-Writing an efficient FFT implementation would constitute a research project on
-its own, and using the FFTW3 library meant that excessive time was not wasted
-reinventing a solution to this problem.
+* *FFTW3* - used for efficient fast Fourier transforms (FFTs), required for
+  windowed-sinc filtering by convolution.
+  Writing an efficient FFT implementation would constitute a research project on
+  its own, and using the FFTW3 library meant that excessive time was not wasted
+  reinventing a solution to this problem.
 
-Libsndfile allows for audio file output in a variety of formats.
-The program only officially supports `.wav` and `.aiff` output, but using
-Libsndfile it would be trivial to add support for other formats, should that
-become necessary.
+* *Libsndfile* - allows for audio file output in a variety of formats.
+  The program only officially supports `.wav` and `.aiff` output, but using
+  Libsndfile it would be trivial to add support for other formats, should that
+  become necessary.
 
-The program makes extensive use of configuration files stored in the JavaScript
-Object Notation format (JSON), and the Rapidjson library is used to parse these
-files.
-As with the FFT implementation, writing an efficient parser is not a trivial
-task, and using a library allowed more time to be spent solving the problem at
-hand, rather than a problem that had already been solved.
+* *Rapidjson* - The program makes extensive use of configuration files stored in
+  the JavaScript Object Notation format (JSON), and this library is used to
+  parse these files.
+  As with the FFT implementation, writing an efficient parser is not a trivial
+  task, and using a library allowed more time to be spent solving the problem at
+  hand, rather than a problem that had already been solved.
 
-Finally, the Gtest library was used for simple unit-testing of the most
-integral parts of the program.
+* *Gtest* - used for simple unit-testing of the most integral parts of the
+  program.
 
 Evaluation
 ==========
@@ -297,24 +305,16 @@ which would not be possible if the algorithm only raytraced the first few
 reflections.
 The HRTF is not incredibly convincing, but is able to reproduce simple
 interchannel level- and time-difference effects.
-
-There is one known bug with the program - with models larger than a few thousand
-triangles the graphics card sometimes runs out of memory, and the program
-quits early.
-This appears to be an issue with the OS X OpenCL implementation, or a driver
-problem, as when the program quits it does so without throwing an exception -
-it just quits.
+Some examples of generated reverbs are given in appendix 1.
 
 A recurring problem throughout the project was low-frequency estimation.
 Though high frequencies were easy to model, below around 200Hz the data tables
 used for material modeling (from @vorlander2008) were lacking in detail, and
 the inherent inaccuracy of ray tracing at low frequencies meant that results
 were quite unstable.
-The data tables used provided only 7 octave-bands of frequency data, and for
+The data tables provided only 7 octave-bands of frequency data, and for
 reasons of memory-efficiency all volume information in the program had to be
-restricted to a single OpenCL vector type, which may contain 2, 4, 8 or 16
-elements.
-Specifically, an 8-component vector type was used, effectively limiting the
+restricted to a single 8-component OpenCL vector type, effectively limiting the
 implementation to 8 frequency bands.
 Ideally, the implementation would have at least one band per octave of audible
 spectrum, which would require 10-band data.
@@ -325,42 +325,44 @@ However, this would lead to significantly higher memory usage, and would
 require custom material measurements to be taken, which was deemed beyond the
 scope of the project.
 
+There is one known bug with the program - with models larger than a few thousand
+triangles the graphics card occasionally runs out of memory, and the program
+quits early.
+This appears to be an issue with the OS X OpenCL implementation, or a driver
+problem, as when the program quits it does so without throwing an exception
+(which would be caught by the program, allowing it to exit gracefully) -
+it just quits.
+
 An interesting extension would be to add multiple source models, in addition to
 the multiple receiver models (polar-pattern and HRTF).
 This could be done relatively simply - it would just require the rays to be
 initialised with volumes depending on their direction, instead of giving them
-uniform volumes of '1'.
+uniform unit volumes [vorlander2008].
 However, this would also require a great number of measurements to be taken in
 order to find appropriate starting volumes for different sources.
 
 It might also be interesting to add user-defined microphone models.
 Currently, the HRTF attenuation mode works by looking up attenuation
 coefficients from a table, depending on the direction of the incoming ray.
-These values were generated using a Python script which
-carried out frequency-domain analysis of HRTF data from the IRCAM Listen
-database (@ircamlisten).
-At the moment, these values are hard-coded, in order to avoid a costly fetch
-and parse (the tables are quite large), but if a suitable file-format could
-be created for the tables, it would be reasonably straightforward to allow
+This table was generated using a Python script which carried out
+frequency-domain analysis of HRTF data from the IRCAM Listen database
+[@ircamlisten].
+The table is hard-coded in order to avoid a costly fetch
+and parse (the tables are quite large), but if a suitable, compact file-format
+could be created for the tables, it would be reasonably straightforward to allow
 the user to supply new table values, and therefore new microphone models.
-
-In future projects it might be interesting to try implementing a completely
-different wave-based model, instead of the current geometric one.
-It's possible that, using the GPU, a reasonably performant version of the
-algorithm could be built, which could even be integrated with the current
-program to provide a different solution for accurate low-frequency estimation.
 
 Finally, the current ray tracing algorithm is fairly naïve.
 For every intersection test, every primitive in the scene is checked for an
 intersection.
 As the speed of the ray trace is limited by the speed of intersection testing,
 substantial speed-ups may be possible by using a 'spatial data structure' such
-as a bounding object hierarchy or octree for primitive storage.
+as a bounding object hierarchy or octree for primitive storage [hradsky2011].
 These data structures drastically reduce the number of primitive checks for each
 ray intersection, at the cost of increased pre-processing time when the scene
 is loaded.
 For the simpler demonstration models used here, these data structures are
-overkill, but for tracing larger, more complex scenes, they may lead to
+not necessary, but for tracing larger, more complex scenes, they may lead to
 increased performance.
 
 Bibliography

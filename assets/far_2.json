@@ -4,7 +4,7 @@
     "rays": 50000,
     "reflections": 128,
     "sample_rate": 44100,
-    "bit_depth": 16,
+    "bit_depth": 24,
     "attenuation_model":
     {   "speakers":
         [   {   "direction": [-1, 0, -1], "shape": 0.5}

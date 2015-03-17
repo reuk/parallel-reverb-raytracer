@@ -96,7 +96,9 @@ bool file_is_readable (const string & i)
 bool file_is_writable (const string & i)
 {
     ofstream os (i);
-    return os.is_open() && (os << "test string" << endl);
+    auto ret = os.is_open() && (os << "test string" << endl);
+    remove (i.c_str());
+    return ret;
 }
 
 int main(int argc, const char * argv[])
@@ -305,6 +307,11 @@ int main(int argc, const char * argv[])
     {
         cerr << "encountered runtime error:" << endl;
         cerr << error.what() << endl;
+        exit (1);
+    }
+    catch (...)
+    {
+        cerr << "encountered unknown runtime error" << endl;
         exit (1);
     }
 
