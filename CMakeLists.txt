@@ -12,6 +12,3 @@ add_subdirectory(rayverb)
 add_subdirectory(cmd)
 add_subdirectory(gtest-1.7.0)
 add_subdirectory(tests)
-add_subdirectory(report)
-
-add_custom_target(docs DEPENDS manpage report)
