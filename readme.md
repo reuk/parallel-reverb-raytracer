@@ -110,7 +110,6 @@ repo structure
   data
 * *include* - any non-original headers that are required by the project
 * *rayverb* - the main raytracing library
-* *report* - what do I have to say for myself?
 * *tests* - simple unit tests
 * *viewer* - a Processing sketch to plot ray paths
 
