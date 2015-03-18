@@ -12,6 +12,7 @@ gtest-1.7.0
 rapidjson-master
 revtest.logicx
 extras
-docs
+docs/html
+docs/latex
 hrtf_analysis/responses
 demo/impulses

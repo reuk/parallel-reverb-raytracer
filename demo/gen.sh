@@ -1,5 +1,16 @@
+outdir=impulses
+mkdir -p $outdir
+
+progname=parallel_raytrace
+
+if command -v parallel_raytrace >/dev/null 2>&1; then
+    progname=$progname
+else
+    progname=../bin/$progname
+fi
+
 callraytrace () {
-    parallel_raytrace ../assets/$1.json ../assets/test_models/$2.obj ../assets/$3.json impulses/$1_$2_$3.aiff
+    $progname assets/configs/$1.json assets/test_models/$2.obj assets/materials/$3.json $outdir/$1_$2_$3.aiff
 }
 
 callraytrace near_c stonehenge              mat

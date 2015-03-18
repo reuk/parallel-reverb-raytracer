@@ -12,3 +12,13 @@ add_subdirectory(rayverb)
 add_subdirectory(cmd)
 add_subdirectory(gtest-1.7.0)
 add_subdirectory(tests)
+
+set(CPACK_GENERATOR "DragNDrop")
+set(CPACK_RESOURCE_FILE_LICENSE ${CMAKE_CURRENT_SOURCE_DIR}/LICENSE.md)
+set(CPACK_PACKAGE_VENDOR "Reuben Thomas")
+set(CPACK_PACKAGE_VERSION "1.0.0")
+
+install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/docs/readme.md DESTINATION .)
+install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/demo DESTINATION .)
+
+include(CPack)
