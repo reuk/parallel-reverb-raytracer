@@ -76,22 +76,7 @@ vector <vector <float>> flattenImpulses
     return flattened;
 }
 
-template <typename T>
-vector <float> sum (const vector <T> & data)
-{
-    vector <float> ret (data.size());
-    transform
-    (   begin (data)
-    ,   end (data)
-    ,   begin (ret)
-    ,   [] (const T & i)
-        {
-            return accumulate (i.s, i.s + sizeof (T) / sizeof (float), 0.0);
-        }
-    );
-    return ret;
-}
-
+/// Sum a collection of vectors of the same length into a single vector
 vector <float> mixdown (const vector <vector <float>> & data)
 {
     vector <float> ret (data.front().size(), 0);
@@ -106,8 +91,11 @@ vector <float> mixdown (const vector <vector <float>> & data)
     return ret;
 }
 
+/// Find the index of the last sample with an amplitude of minVol or higher,
+/// then resize the vectors down to this length.
 void trimTail (vector <vector <float>> & audioChannels, float minVol)
 {
+    // Find last index of required amplitude or greater.
     auto len = accumulate
     (   audioChannels.begin()
     ,   audioChannels.end()
@@ -128,10 +116,12 @@ void trimTail (vector <vector <float>> & audioChannels, float minVol)
         }
     );
 
+    // Resize.
     for (auto && i : audioChannels)
         i.resize (len);
 }
 
+/// Collects together all the post-processing steps.
 vector <vector <float>> process
 (   RayverbFiltering::FilterType filtertype
 ,   vector <vector <vector <float>>> & data
@@ -160,6 +150,7 @@ vector <vector <float>> process
 
 ContextProvider::ContextProvider()
 {
+    // Set up a GPU context.
     vector <cl::Platform> platform;
     cl::Platform::get (&platform);
 
@@ -181,20 +172,26 @@ KernelLoader::KernelLoader()
 KernelLoader::KernelLoader(bool verbose)
 :   cl_program (cl_context, KERNEL_STRING, false)
 {
+    // Grab the final device that the context makes available.
     vector <cl::Device> device = cl_context.getInfo <CL_CONTEXT_DEVICES>();
     vector <cl::Device> used_devices (device.end() - 1, device.end());
 
+    // Build program for this device.
     cl_program.build (used_devices);
     cl::Device used_device = used_devices.front();
 
     if (verbose)
+    {
         cerr
         <<  cl_program.getBuildInfo <CL_PROGRAM_BUILD_LOG> (used_device)
         <<  endl;
+    }
 
+    // Set up a queue on this device.
     queue = cl::CommandQueue (cl_context, used_device);
 }
 
+/// Find the minimum and maximum boundaries of a set of vertices.
 pair <cl_float3, cl_float3> getBounds
 (   const vector <cl_float3> & vertices
 )
@@ -206,7 +203,11 @@ pair <cl_float3, cl_float3> getBounds
         ,   vertices.front()
         ,   [] (const auto & a, const auto & b)
             {
-                return elementwise (a, b, [] (auto i, auto j) {return min (i, j);});
+                return elementwise (a, b, [] (auto i, auto j)
+                    {
+                        return min (i, j);
+                    }
+                );
             }
         )
     ,   accumulate
@@ -215,13 +216,21 @@ pair <cl_float3, cl_float3> getBounds
         ,   vertices.front()
         ,   [] (const auto & a, const auto & b)
             {
-                return elementwise (a, b, [] (auto i, auto j) {return max (i, j);});
+                return elementwise (a, b, [] (auto i, auto j)
+                    {
+                        return max (i, j);
+                    }
+                );
             }
         )
     );
 }
 
-bool inside (const pair <cl_float3, cl_float3> & bounds, const cl_float3 & point)
+/// Does a point fall within the cuboid defined by the point pair bounds?
+bool inside
+(   const pair <cl_float3, cl_float3> & bounds
+,   const cl_float3 & point
+)
 {
     for (auto i = 0; i != sizeof (cl_float3) / sizeof (float); ++i)
         if (! (bounds.first.s [i] <= point.s [i] && point.s [i] <= bounds.second.s [i]))
@@ -229,6 +238,7 @@ bool inside (const pair <cl_float3, cl_float3> & bounds, const cl_float3 & point
     return true;
 }
 
+/// Reserve graphics memory.
 Raytracer::Raytracer
 (   unsigned long nreflections
 ,   vector <Triangle> & triangles
@@ -282,6 +292,7 @@ Raytracer::Raytracer
 {
 }
 
+/// Utility class for loading and extracting data from 3d object files.
 struct Raytracer::SceneData
 {
 public:
@@ -290,13 +301,40 @@ public:
         populate (objpath, materialFileName, verbose);
     }
 
+    map <string, Surface> extractSurfaces (const string & materialFileName)
+    {
+        Document document;
+        attemptJsonParse (materialFileName, document);
+        if (! document.IsObject())
+            throw runtime_error ("Materials must be stored in a JSON object");
+
+        map <string, Surface> ret;
+        for
+        (   auto i = document.MemberBegin()
+        ;   i != document.MemberEnd()
+        ;   ++i
+        )
+        {
+            string name = i->name.GetString();
+
+            Surface surface;
+            ValueJsonValidator <Surface> getter (surface);
+            getter.run (i->value);
+            ret [name] = surface;
+        }
+
+        return ret;
+    }
+
+    /// Given a scene and a material file, match meshes to materials and extract
+    /// faces.
     void populate (const aiScene * scene, const string & materialFileName, bool verbose)
     {
         if (! scene)
             throw runtime_error ("Failed to load object file.");
 
         Surface defaultSurface = {
-            (VolumeType) {{0.02, 0.02, 0.03, 0.03, 0.04, 0.05, 0.05, 0.05}},
+            (VolumeType) {{0.92, 0.92, 0.93, 0.93, 0.94, 0.95, 0.95, 0.95}},
             (VolumeType) {{0.50, 0.90, 0.95, 0.95, 0.95, 0.95, 0.95, 0.95}}
         };
 
@@ -307,23 +345,12 @@ public:
         if (! document.IsObject())
             throw runtime_error ("Materials must be stored in a JSON object");
 
+        auto surfaceMap = extractSurfaces (materialFileName);
         map <string, int> materialIndices;
-        for
-        (   auto i = document.MemberBegin()
-        ;   i != document.MemberEnd()
-        ;   ++i
-        )
+        for (const auto & i : surfaceMap)
         {
-            string name = i->name.GetString();
-            Surface surface;
-            JsonGetter <Surface> getter (surface);
-            if (! getter.check (i->value))
-            {
-                throw runtime_error ("invalid surface");
-            }
-            getter.get (i->value);
-            surfaces.push_back (surface);
-            materialIndices [name] = surfaces.size() - 1;
+            surfaces.push_back (i.second);
+            materialIndices [i.first] = surfaces.size() - 1;
         }
 
         for (auto i = 0; i != scene->mNumMeshes; ++i)
@@ -344,10 +371,10 @@ public:
             if (nameIterator != materialIndices.end())
                 mat_index = nameIterator->second;
 
-            Surface surface = surfaces [mat_index];
-
             if (verbose)
             {
+                Surface surface = surfaces [mat_index];
+
                 cerr << "    Material name: " << matName.C_Str() << endl;
 
                 cerr << "    Material properties: " << endl;
@@ -562,6 +589,7 @@ void Raytracer::raytrace
         auto b = i * RAY_GROUP_SIZE;
         auto e = min (directions.size(), (i + 1) * RAY_GROUP_SIZE);
 
+        //  copy input to buffer
         cl::copy
         (   queue
         ,   directions.begin() + b
@@ -587,6 +615,7 @@ void Raytracer::raytrace
         ,   cl_image_source_index
         );
 
+        //  run kernel
         raytrace_kernel
         (   cl::EnqueueArgs (queue, cl::NDRange (RAY_GROUP_SIZE))
         ,   cl_directions
@@ -612,6 +641,7 @@ void Raytracer::raytrace
             }}
         );
 
+        //  copy output to main memory
         cl::copy
         (   queue
         ,   cl_image_source_index
@@ -620,6 +650,7 @@ void Raytracer::raytrace
         );
         cl::copy (queue, cl_image_source, begin (image), end (image));
 
+        //  remove duplicate image-source contributions
         for
         (   auto j = 0
         ;   j != RAY_GROUP_SIZE * NUM_IMAGE_SOURCE
@@ -677,7 +708,7 @@ RaytracerResults Raytracer::getRawImages (bool removeDirect)
 RaytracerResults Raytracer::getAllRaw (bool removeDirect)
 {
     auto diffuse = getRawDiffuse().impulses;
-    auto image = getRawImages (removeDirect).impulses;
+    const auto image = getRawImages (removeDirect).impulses;
     diffuse.insert (diffuse.end(), image.begin(), image.end());
     return RaytracerResults (diffuse, storedMicpos);
 }
@@ -739,6 +770,7 @@ vector <AttenuatedImpulse> HrtfAttenuator::attenuate
 ,   const vector <Impulse> & impulses
 )
 {
+    //  muck around with the table format
     vector <VolumeType> hrtfChannelData (360 * 180);
     auto offset = 0;
     for (const auto & i : getHrtfData() [channel])
@@ -747,8 +779,10 @@ vector <AttenuatedImpulse> HrtfAttenuator::attenuate
         offset += i.size();
     }
 
+    //  copy hrtf table to buffer
     cl::copy (queue, begin (hrtfChannelData), end (hrtfChannelData), cl_hrtf);
 
+    //  set up buffers
     cl_in = cl::Buffer
     (   cl_context
     ,   CL_MEM_READ_WRITE
@@ -760,7 +794,10 @@ vector <AttenuatedImpulse> HrtfAttenuator::attenuate
     ,   impulses.size() * sizeof (AttenuatedImpulse)
     );
 
+    //  copy input to buffer
     cl::copy (queue, impulses.begin(), impulses.end(), cl_in);
+
+    //  run kernel
     attenuate_kernel
     (   cl::EnqueueArgs (queue, cl::NDRange (impulses.size()))
     ,   mic_pos
@@ -771,7 +808,11 @@ vector <AttenuatedImpulse> HrtfAttenuator::attenuate
     ,   up
     ,   channel
     );
+
+    //  create output storage
     vector <AttenuatedImpulse> ret (impulses.size());
+
+    //  copy to output
     cl::copy (queue, cl_out, ret.begin(), ret.end());
     return ret;
 }
@@ -818,6 +859,7 @@ vector <AttenuatedImpulse> SpeakerAttenuator::attenuate
 ,   const vector <Impulse> & impulses
 )
 {
+    //  init buffers
     cl_in = cl::Buffer
     (   cl_context
     ,   CL_MEM_READ_WRITE
@@ -829,7 +871,10 @@ vector <AttenuatedImpulse> SpeakerAttenuator::attenuate
     ,   impulses.size() * sizeof (AttenuatedImpulse)
     );
 
+    //  copy input data to buffer
     cl::copy (queue, impulses.begin(), impulses.end(), cl_in);
+
+    //  run kernel
     attenuate_kernel
     (   cl::EnqueueArgs (queue, cl::NDRange (impulses.size()))
     ,   mic_pos
@@ -837,7 +882,11 @@ vector <AttenuatedImpulse> SpeakerAttenuator::attenuate
     ,   cl_out
     ,   speaker
     );
+
+    //  create output location
     vector <AttenuatedImpulse> ret (impulses.size());
+
+    //  copy from buffer to output
     cl::copy (queue, cl_out, ret.begin(), ret.end());
     return ret;
 }

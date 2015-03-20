@@ -47,26 +47,27 @@ struct JsonValidatorBase
 struct OptionalValidator;
 struct RequiredValidator;
 
-template <typename T, typename U> struct JsonValidator;
+template <typename T> struct ValueJsonValidator;
+template <typename T, typename U> struct FieldJsonValidator;
 
 /// Used to register required and optional fields that should be present in a
 /// config file.
 /// Also has the ability to parse a value for these required and optional
 /// fields.
 /// You almost definitely want an instance of THIS CLASS rather than any other.
-class ConfigValidator
+class ConfigValidator: public JsonValidatorBase
 {
 public:
     template <typename T>
     void addOptionalValidator (const std::string & s, T & t)
     {
-        validators.emplace_back (new JsonValidator <T, OptionalValidator> (s, t));
+        validators.emplace_back (new FieldJsonValidator <T, OptionalValidator> (s, t));
     }
 
     template <typename T>
     void addRequiredValidator (const std::string & s, T & t)
     {
-        validators.emplace_back (new JsonValidator <T, RequiredValidator> (s, t));
+        validators.emplace_back (new FieldJsonValidator <T, RequiredValidator> (s, t));
     }
 
     virtual void run (const rapidjson::Value & value) const
@@ -420,12 +421,8 @@ struct JsonGetter<std::vector <T>>
         for (auto i = value.Begin(); i != value.End(); ++i)
         {
             T temp;
-            JsonGetter <T> getter (temp);
-            if (! getter.check (*i))
-            {
-                throw std::runtime_error ("invalid value in array");
-            }
-            getter.get (*i);
+            ValueJsonValidator <T> getter (temp);
+            getter.run (*i);
             t.push_back (temp);
         }
     }
@@ -478,6 +475,21 @@ struct JsonGetter<AttenuationModel>
     std::map <AttenuationModel::Mode, std::string> keys;
 };
 
+template <typename T>
+struct ValueJsonValidator: public JsonValidatorBase, public JsonGetter <T>
+{
+    ValueJsonValidator (T & t): JsonGetter <T> (t) {}
+
+    virtual void run (const rapidjson::Value & value) const
+    {
+        if (! JsonGetter<T>::check (value))
+        {
+            throw std::runtime_error ("invalid value");
+        }
+        JsonGetter<T>::get (value);
+    }
+};
+
 /// Combines the functionality of any templated JsonGetter with any Validator,
 /// giving an object that, when run, validates that the value is present, checks
 /// it, and gets it if possible.
@@ -485,20 +497,18 @@ struct JsonGetter<AttenuationModel>
 /// JsonValidatorBase, which allows for runtime-polymorphic JsonValidators to
 /// be instantiated, depending on runtime requirements.
 template <typename T, typename U>
-struct JsonValidator: public JsonValidatorBase, public JsonGetter <T>, public U
+struct FieldJsonValidator: public ValueJsonValidator <T>, public U
 {
-    JsonValidator (const std::string & s, T & t): JsonGetter <T> (t), U (s) {}
+    FieldJsonValidator (const std::string & s, T & t)
+    :   ValueJsonValidator <T> (t)
+    ,   U (s)
+    {}
 
     virtual void run (const rapidjson::Value & value) const
     {
         if (U::validate (value))
         {
-            if (! JsonGetter<T>::check (value [U::getString().c_str()]))
-            {
-                throw std::runtime_error ("invalid value for key " + U::getString());
-            }
-            JsonGetter<T>::get (value [U::getString().c_str()]);
+            ValueJsonValidator <T>::run (value [U::getString().c_str()]);
         }
     }
 };
-

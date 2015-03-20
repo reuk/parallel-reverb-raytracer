@@ -16,7 +16,7 @@
 #include <array>
 #include <map>
 
-#define DIAGNOSTIC
+//#define DIAGNOSTIC
 
 /// Sum impulses ocurring at the same (sampled) time and return a vector in
 /// which each subsequent item refers to the next sample of an impulse
@@ -32,7 +32,8 @@ std::vector <std::vector <std::vector <float>>> flattenImpulses
 ,   float samplerate
 );
 
-/// Filter each channel of the input data, then normalize all channels.
+/// Filter and mix down each channel of the input data.
+/// Optionally, normalize all channels, trim the tail, and scale the amplitude.
 std::vector <std::vector <float>> process
 (   RayverbFiltering::FilterType filtertype
 ,   std::vector <std::vector <std::vector <float>>> & data
