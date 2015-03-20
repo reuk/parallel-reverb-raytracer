@@ -18,3 +18,8 @@ add_definitions(${test_file_flag})
 add_executable(${name} ${sources})
 
 target_link_libraries(${name} rayverb gtest)
+
+set_property(TARGET ${name}
+    PROPERTY COMPILE_DEFINITIONS
+        TEST_OBJ="${CMAKE_SOURCE_DIR}/demo/assets/test_models/large_square.obj"
+        TEST_MAT="${CMAKE_SOURCE_DIR}/demo/assets/materials/mat.json")

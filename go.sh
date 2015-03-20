@@ -1,12 +1,16 @@
+callraytrace () {
+    CL_LOG_ERRORS=stdout time ./parallel_raytrace ../../demo/assets/configs/$1.json ../../demo/assets/test_models/$2.obj ../../demo/assets/materials/$3.json $1_$2_$3.aiff | tee out.dump
+}
+
 cd build
 if make ; then
     cd bin
     if ./tests ; then
         echo "Tests succeeded!"
-    #    CL_LOG_ERRORS=stdout time ./parallel_raytrace ../../assets/config_hrtf.json ../../assets/room3.dxf ../../assets/mat.json out.aiff | tee out.dump
-    #    CL_LOG_ERRORS=stdout time ./parallel_raytrace ../../assets/stonehenge.json ../../assets/test_models/stonehenge.obj ../../assets/mat.json out.aiff | tee out.dump
-        CL_LOG_ERRORS=stdout time ./parallel_raytrace ../../assets/bedroom.json ../../assets/test_models/bedroom.obj ../../assets/mat.json out.aiff | tee out.dump
-    #    CL_LOG_ERRORS=stdout time ./parallel_raytrace ../../assets/large_square.json ../../assets/test_models/large_square.obj ../../assets/mat.json out.aiff | tee out.dump
+        #callraytrace bedroom bedroom mat
+        #callraytrace near_c small_square mat
+        #callraytrace near_c large_pentagon mat
+        callraytrace far large_pentagon mat
     else
         echo "Tests failed. Skipping running the raytracer."
     fi

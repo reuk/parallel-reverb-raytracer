@@ -1,10 +1,12 @@
 #include "filters.h"
+#include "generic_functions.h"
 
 #include <numeric>
 #include <iostream>
 
 using namespace std;
 
+/// sinc t = sin (pi . t) / pi . t
 template <typename T>
 T sinc (const T & t)
 {
@@ -12,6 +14,7 @@ T sinc (const T & t)
     return sin (pit) / pit;
 }
 
+/// Generate a convolution kernel for a lowpass sinc filter (NO WINDOWING!).
 template <typename T>
 vector <T> sincKernel (double cutoff, unsigned long length)
 {
@@ -29,6 +32,7 @@ vector <T> sincKernel (double cutoff, unsigned long length)
     return ret;
 }
 
+/// Generate a blackman window of a specific length.
 template <typename T>
 vector <T> blackman (unsigned long length)
 {
@@ -49,23 +53,25 @@ vector <T> blackman (unsigned long length)
     return ret;
 }
 
+/// Generate a windowed, normalized low-pass sinc filter kernel of a specific
+/// length.
 vector <float> lopassKernel (float sr, float cutoff, unsigned long length)
 {
     auto window = blackman <float> (length);
     auto kernel = sincKernel <float> (cutoff / sr, length);
-    vector <float> ret (length);
     transform
     (   begin (window)
     ,   end (window)
     ,   begin (kernel)
-    ,   begin (ret)
+    ,   begin (kernel)
     ,   [] (auto i, auto j) { return i * j; }
     );
-    auto sum = accumulate (begin (ret), end (ret), 0.0);
-    for (auto && i : ret) i /= sum;
-    return ret;
+    normalize (kernel);
+    return kernel;
 }
 
+/// Generate a windowed, normalized high-pass sinc filter kernel of a specific
+/// length.
 vector <float> hipassKernel (float sr, float cutoff, unsigned long length)
 {
     auto kernel = lopassKernel (sr, cutoff, length);
@@ -87,7 +93,9 @@ void RayverbFiltering::Bandpass::setParams (float l, float h, float s)
     sr = s;
 }
 
-RayverbFiltering::HipassWindowedSinc::HipassWindowedSinc (unsigned long inputLength)
+RayverbFiltering::HipassWindowedSinc::HipassWindowedSinc
+(   unsigned long inputLength
+)
 :   FastConvolution (KERNEL_LENGTH + inputLength - 1)
 {
 
@@ -107,7 +115,9 @@ void RayverbFiltering::HipassWindowedSinc::setParams
     copy (i.begin(), i.end(), kernel.begin());
 }
 
-RayverbFiltering::BandpassWindowedSinc::BandpassWindowedSinc (unsigned long inputLength)
+RayverbFiltering::BandpassWindowedSinc::BandpassWindowedSinc
+(   unsigned long inputLength
+)
 :   FastConvolution (KERNEL_LENGTH + inputLength - 1)
 {
 
@@ -180,8 +190,13 @@ void RayverbFiltering::Biquad::twopass (vector <float> & data)
     reverse (begin (data), end (data));
 }
 
-void RayverbFiltering::OnepassBandpassBiquad::setParams (float lo, float hi, float sr)
+void RayverbFiltering::OnepassBandpassBiquad::setParams
+(   float lo
+,   float hi
+,   float sr
+)
 {
+    // From www.musicdsp.org/files/Audio-EQ-Cookbook.txt
     const double c = sqrt (lo * hi);
     const double omega = 2 * M_PI * c / sr;
     const double cs = cos (omega);
@@ -262,7 +277,9 @@ void RayverbFiltering::filter
     switch (ft)
     {
     case FILTER_TYPE_WINDOWED_SINC:
-        bp = unique_ptr <Bandpass> (new BandpassWindowedSinc (data.front().front().size()));
+        bp = unique_ptr <Bandpass>
+        (   new BandpassWindowedSinc (data.front().front().size())
+        );
         break;
     case FILTER_TYPE_BIQUAD_ONEPASS:
         bp = unique_ptr <Bandpass> (new OnepassBandpassBiquad());

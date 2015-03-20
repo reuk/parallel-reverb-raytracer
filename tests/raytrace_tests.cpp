@@ -4,7 +4,7 @@ const cl_float3 TestsNamespace::RaytracerTest::mic_pos;
 const cl_float3 TestsNamespace::RaytracerTest::src_pos;
 
 TestsNamespace::RaytracerTest::RaytracerTest()
-:   Raytracer (NUM_REFLECTIONS, "../../assets/test_models/large_square.obj", "../../assets/mat.json", true)
+:   Raytracer (NUM_REFLECTIONS, TEST_OBJ, TEST_MAT, true)
 {
     directions.push_back ({{ 0,  0, -1}});
     directions.push_back ({{ 0,  0,  1}});

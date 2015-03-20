@@ -6,6 +6,12 @@ import processing.pdf.*;
 OBJModel model;
 PeasyCam cam;
 
+final float SPHERE_SIZE = 0.1;
+
+final String config = "../demo/assets/configs/far.json";
+final String objfile = "/Users/reuben/dev/parallel_raytrace/demo/assets/test_models/large_pentagon.obj";
+final String raytracefile = "/Users/reuben/dev/parallel_raytrace/build/bin/impulse.dump";
+
 class Intersection
 {
   Intersection (PVector position, float volume)
@@ -33,16 +39,16 @@ void setup()
   
   rotateZ(PI / 2);
   
-  model = new OBJModel (this, "/Users/reuben/dev/parallel_raytrace/assets/test_models/random_pillars.obj");
+  model = new OBJModel (this, objfile);
   
-  JSONObject config_json = loadJSONObject ("../assets/far.json");
+  JSONObject config_json = loadJSONObject (config);
   JSONArray s_pos = config_json.getJSONArray ("source_position");
   JSONArray m_pos = config_json.getJSONArray ("mic_position");
   
   source_pos = new PVector (s_pos.getFloat (0), -s_pos.getFloat (1), s_pos.getFloat (2));
   mic_pos = new PVector (m_pos.getFloat (0), -m_pos.getFloat (1), m_pos.getFloat (2));
 
-  BufferedReader reader = createReader ("/Users/reuben/dev/parallel_raytrace/build/bin/impulse.dump");
+  BufferedReader reader = createReader (raytracefile);
 
   boolean read = true;
   while (read)
@@ -76,6 +82,7 @@ void setup()
   cam = new PeasyCam(this, 100);
   cam.setMinimumDistance(0);
   cam.setMaximumDistance(200);
+  cam.setWheelScale(0.1);
 }
 
 void vertex (PVector p) 
@@ -117,14 +124,14 @@ void draw()
   fill (1, 0, 0);
   noStroke();
   translate (source_pos);
-  sphere (1);
+  sphere (SPHERE_SIZE);
   popMatrix();
   
   pushMatrix();
   fill (0, 1, 1);
   noStroke();
   translate (mic_pos);
-  sphere (1);
+  sphere (SPHERE_SIZE);
   popMatrix();
 
   if (doFill)

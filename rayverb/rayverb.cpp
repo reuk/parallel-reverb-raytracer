@@ -43,21 +43,27 @@ vector <vector <vector <float>>> flattenImpulses
     return flattened;
 }
 
+/// Turn a collection of AttenuatedImpulses into a vector of 8 vectors, where
+/// each of the 8 vectors represent sample values in a different frequency band.
 vector <vector <float>> flattenImpulses
 (   const vector <AttenuatedImpulse> & impulse
 ,   float samplerate
 )
 {
+    // Find the index of the final sample based on time and samplerate
     float maxtime = 0;
     for (const auto & i : impulse)
         maxtime = max (maxtime, i.time);
     const auto MAX_SAMPLE = round (maxtime * samplerate) + 1;
 
+    //  Create somewhere to store the results.
     vector <vector <float>> flattened
     (   sizeof (VolumeType) / sizeof (float)
     ,   vector <float> (MAX_SAMPLE, 0)
     );
 
+    //  For each impulse, calculate its index, then add the impulse's volumes
+    //  to the volumes already in the output array.
     for (const auto & i : impulse)
     {
         const auto SAMPLE = round (i.time * samplerate);
@@ -634,12 +640,6 @@ void Raytracer::raytrace
                     {
                         imageSourceTally [surfaces] = image [j + k - 1];
                     }
-#ifdef DIAGNOSTIC
-                    else
-                    {
-                        cout << it->second.time << " " << image [j + k - 1].time << endl;
-                    }
-#endif
                 }
             }
         }

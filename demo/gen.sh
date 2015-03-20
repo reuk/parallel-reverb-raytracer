@@ -13,6 +13,11 @@ callraytrace () {
     $progname assets/configs/$1.json assets/test_models/$2.obj assets/materials/$3.json $outdir/$1_$2_$3.aiff
 }
 
+callraytrace bedroom bedroom mat
+callraytrace near_c small_square mat
+callraytrace near_c large_pentagon mat
+callraytrace far large_pentagon mat
+
 callraytrace near_c stonehenge              mat
 callraytrace near_c bedroom                 mat
 callraytrace near_l stonehenge              mat
@@ -30,7 +35,6 @@ callraytrace far_2 stonehenge               mat
 callraytrace near_c small_triangle          mat
 callraytrace near_l small_triangle          mat
 callraytrace near_r small_triangle          mat
-callraytrace near_c small_square            mat
 callraytrace near_l small_square            mat
 callraytrace near_r small_square            mat
 callraytrace near_c small_pentagon          mat
