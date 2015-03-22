@@ -575,9 +575,9 @@ VolumeType hrtf_attenuation
 {
     float3 transformed = transform(pointing, up, impulseDirection);
 
-    unsigned long a = degrees(azimuth(transformed));
-    a += 180;
-    unsigned long e = degrees(elevation(transformed));
+    long a = degrees(azimuth(transformed)) + 180;
+    a %= 360;
+    long e = degrees(elevation(transformed));
     e = 90 - e;
 
     return hrtfData[a * 180 + e];

@@ -57,6 +57,8 @@ To Do
 [ ] why no comb filtering in square rooms?
 [ ] compare results to commercial software
 
+* multichannel example
+
 Documentation
 =============
 

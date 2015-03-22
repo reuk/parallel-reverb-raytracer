@@ -21,5 +21,5 @@ target_link_libraries(${name} rayverb ${sndfile_library})
 
 add_custom_target(manpage make COMMAND make rebuild WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
-install(TARGETS ${name} RUNTIME DESTINATION bin)
-install(FILES parallel_raytrace.1 parallel_raytrace.1.md.pdf DESTINATION man)
+install(TARGETS ${name} RUNTIME DESTINATION bin COMPONENT runnable)
+install(FILES parallel_raytrace.1 parallel_raytrace.1.md.pdf DESTINATION man COMPONENT man)

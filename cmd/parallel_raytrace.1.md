@@ -173,6 +173,8 @@ The required fields are as follows:
       A `shape` of `0.0` corresponds to an omnidirectional pickup, while a shape
       of `1.0` corresponds to a bipolar pickup.
       Cardioid is at `0.5`.
+      The output will be a single multichannel audio file, where the channels
+      are in the *same order* as the speakers specified in the config file.
     * If the key is `hrtf`, the value for that key should be a single object
       with two keys, `facing` and `up`.
       Each of these are 3D vectors - `facing` is the direction in which the

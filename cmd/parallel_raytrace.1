@@ -185,6 +185,9 @@ corresponds to the shape of the polar pattern.
 A \f[C]shape\f[] of \f[C]0.0\f[] corresponds to an omnidirectional
 pickup, while a shape of \f[C]1.0\f[] corresponds to a bipolar pickup.
 Cardioid is at \f[C]0.5\f[].
+The output will be a single multichannel audio file, where the channels
+are in the \f[I]same order\f[] as the speakers specified in the config
+file.
 .IP \[bu] 2
 If the key is \f[C]hrtf\f[], the value for that key should be a single
 object with two keys, \f[C]facing\f[] and \f[C]up\f[].

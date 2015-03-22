@@ -5,12 +5,13 @@ callraytrace () {
 cd build
 if make ; then
     cd bin
-    if ./tests ; then
+    if CL_LOG_ERRORS=stdout ./tests ; then
         echo "Tests succeeded!"
         #callraytrace bedroom bedroom mat
         #callraytrace near_c small_square mat
         #callraytrace near_c large_pentagon mat
-        callraytrace far large_pentagon mat
+        #callraytrace far large_pentagon mat
+        callraytrace vault vault vault
     else
         echo "Tests failed. Skipping running the raytracer."
     fi

@@ -44,7 +44,10 @@ namespace TestsNamespace {
         run (config0);
         for (auto i = 0; i != sizeof (VolumeType) / sizeof (float); ++i)
         {
-            ASSERT_FLOAT_EQ(HRTF_DATA [0] [180] [90].s [i], out [5].volume.s [i]);
+            ASSERT_FLOAT_EQ(HRTF_DATA [0] [180] [90].s [i], out [5].volume.s [i]) << i;
+            ASSERT_FLOAT_EQ(HRTF_DATA [0] [0] [90].s [i], out [4].volume.s [i]) << i;
+            ASSERT_FLOAT_EQ(HRTF_DATA [0] [90] [90].s [i], out [0].volume.s [i]) << i;
+            ASSERT_FLOAT_EQ(HRTF_DATA [0] [270] [90].s [i], out [1].volume.s [i]) << i;
         }
     }
     TEST_F(HrtfTest, HrtfConfig1)
@@ -53,6 +56,9 @@ namespace TestsNamespace {
         for (auto i = 0; i != sizeof (VolumeType) / sizeof (float); ++i)
         {
             ASSERT_FLOAT_EQ(HRTF_DATA [0] [180] [90].s [i], out [1].volume.s [i]);
+            ASSERT_FLOAT_EQ(HRTF_DATA [0] [0] [90].s [i], out [0].volume.s [i]);
+            ASSERT_FLOAT_EQ(HRTF_DATA [0] [90] [90].s [i], out [5].volume.s [i]);
+            ASSERT_FLOAT_EQ(HRTF_DATA [0] [270] [90].s [i], out [4].volume.s [i]);
         }
     }
     TEST_F(HrtfTest, HrtfConfig2)
@@ -61,6 +67,9 @@ namespace TestsNamespace {
         for (auto i = 0; i != sizeof (VolumeType) / sizeof (float); ++i)
         {
             ASSERT_FLOAT_EQ(HRTF_DATA [0] [180] [90].s [i], out [4].volume.s [i]);
+            ASSERT_FLOAT_EQ(HRTF_DATA [0] [0] [90].s [i], out [5].volume.s [i]);
+            ASSERT_FLOAT_EQ(HRTF_DATA [0] [90] [90].s [i], out [1].volume.s [i]);
+            ASSERT_FLOAT_EQ(HRTF_DATA [0] [270] [90].s [i], out [0].volume.s [i]);
         }
     }
     TEST_F(HrtfTest, HrtfConfig3)
@@ -69,6 +78,9 @@ namespace TestsNamespace {
         for (auto i = 0; i != sizeof (VolumeType) / sizeof (float); ++i)
         {
             ASSERT_FLOAT_EQ(HRTF_DATA [0] [180] [90].s [i], out [0].volume.s [i]);
+            ASSERT_FLOAT_EQ(HRTF_DATA [0] [0] [90].s [i], out [1].volume.s [i]);
+            ASSERT_FLOAT_EQ(HRTF_DATA [0] [90] [90].s [i], out [4].volume.s [i]);
+            ASSERT_FLOAT_EQ(HRTF_DATA [0] [270] [90].s [i], out [5].volume.s [i]);
         }
     }
 }
