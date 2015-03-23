@@ -55,10 +55,14 @@ cmake ..
 make
 
 # optional
-make install
+make package
 ```
 
-Once these libraries all have CMake builds of their own I (might) add git
+*IMPORTANT!* don't `make install` - the install targets are set up to produce
+a packaged distribution, so you'll end up with a lot of unnecessary extras
+installed in /usr/local if you run this.
+
+Once the libraries all have CMake builds of their own I might add git
 submodules for them.
 
 On Mac OS X the OpenCL framework is used.
@@ -74,10 +78,10 @@ dir of the project.
 system requirements
 -------------------
 
-Should run on any recent Mac running Mavericks or newer with a discrete
+Should run on any recent Mac running 10.9 or newer with a discrete
 graphics card.
-Might also work on systems with integrated graphics, but this has not been
-tested.
+Might also work on systems with integrated graphics, but this has not
+been tested.
 
 getting started
 ---------------

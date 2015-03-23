@@ -14,7 +14,7 @@ For full source code, visit the [github repo](https://github.com/reuk/parallel-r
 System Requirements
 ===================
 
-A Mac running Mavericks or newer, with a discrete graphics card.
+A Mac running OS X 10.9 or newer, with a discrete graphics card.
 
 
 Package Layout
