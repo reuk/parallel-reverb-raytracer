@@ -19,6 +19,10 @@ callraytrace () {
     $progname assets/configs/$1.json assets/test_models/$2.obj assets/materials/$3.json $outdir/$2/$2_$1_$3.aiff
 }
 
+callraytrace hrtf_vault random_pillars mat
+callraytrace hrtf_vault_l random_pillars mat
+callraytrace hrtf_vault_r random_pillars mat
+
 callraytrace oct random_pillars mat
 
 callraytrace near_c echo_tunnel mat
@@ -142,3 +146,53 @@ callraytrace far large_triangle             damped
 callraytrace far large_square               damped
 callraytrace far large_pentagon             damped
 callraytrace far large_heptagon             damped
+
+callraytrace near_c small_triangle          bright
+callraytrace near_c small_square            bright
+callraytrace near_c small_pentagon          bright
+callraytrace near_c small_heptagon          bright
+callraytrace near_c medium_triangle         bright
+callraytrace near_c medium_square           bright
+callraytrace near_c medium_pentagon         bright
+callraytrace near_c medium_heptagon         bright
+callraytrace near_c large_triangle          bright
+callraytrace near_c large_square            bright
+callraytrace near_c large_pentagon          bright
+callraytrace near_c large_heptagon          bright
+callraytrace medium medium_triangle         bright
+callraytrace medium medium_square           bright
+callraytrace medium medium_pentagon         bright
+callraytrace medium medium_heptagon         bright
+callraytrace medium large_triangle          bright
+callraytrace medium large_square            bright
+callraytrace medium large_pentagon          bright
+callraytrace medium large_heptagon          bright
+callraytrace far large_triangle             bright
+callraytrace far large_square               bright
+callraytrace far large_pentagon             bright
+callraytrace far large_heptagon             bright
+
+callraytrace near_c small_triangle          brighter
+callraytrace near_c small_square            brighter
+callraytrace near_c small_pentagon          brighter
+callraytrace near_c small_heptagon          brighter
+callraytrace near_c medium_triangle         brighter
+callraytrace near_c medium_square           brighter
+callraytrace near_c medium_pentagon         brighter
+callraytrace near_c medium_heptagon         brighter
+callraytrace near_c large_triangle          brighter
+callraytrace near_c large_square            brighter
+callraytrace near_c large_pentagon          brighter
+callraytrace near_c large_heptagon          brighter
+callraytrace medium medium_triangle         brighter
+callraytrace medium medium_square           brighter
+callraytrace medium medium_pentagon         brighter
+callraytrace medium medium_heptagon         brighter
+callraytrace medium large_triangle          brighter
+callraytrace medium large_square            brighter
+callraytrace medium large_pentagon          brighter
+callraytrace medium large_heptagon          brighter
+callraytrace far large_triangle             brighter
+callraytrace far large_square               brighter
+callraytrace far large_pentagon             brighter
+callraytrace far large_heptagon             brighter

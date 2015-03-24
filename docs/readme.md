@@ -22,7 +22,8 @@ Package Layout
 
 * *bin*       - the program!
 * *man*       - detailed documentation
-* *demo*      - some examples to get you started
+* *demo*      - a script and some models to get you started producing reverbs
+* *examples*  - some pre-rendered impulse response
 * *readme.md* - this file
 
 
@@ -59,22 +60,23 @@ First Run
 Generating Lots of Demos
 ------------------------
 
-Lots of example impulses are given in the `demo/impulses` folder.
+Lots of example impulses are given in the `examples/impulses` folder.
 You can re-generate these all yourself if you want.
 
-First, delete the contents of `demo/impulses`.
-Now, in your Terminal window, type `cd`, then drop in the `demo` folder, then
+Now, in a Terminal window, type `cd`, then drop in the `demo` folder, then
 press enter.
 Finally, run `./gen.sh`.
 This command just runs the parallel_raytrace program on lots and lots of
 different inputs, and will probably run for a *long time*.
+On my machine, each trace takes about 10 seconds, so generating all
+100-or-so will probably take 15 or 20 minutes.
 
 Listening to the Demos
 ----------------------
 
 If you have Max MSP and the [HissTools](http://eprints.hud.ac.uk/14897/)
-installed you can use `test_convolver.maxpat` to listen to the impulse responses
-in action.
+installed you can use `examples/test_convolver.maxpat` to listen to the impulse
+responses in action.
 More information on this patch is provided within the patch itself.
 
 
@@ -86,10 +88,10 @@ explains the input file formats in detail.
 This file is a prettier version of the UNIX manpage for the program, which is
 also included.
 
-If you decide you can't live without the program and want to install it on your
-machine, move `parallel_raytrace` from `bin` to `/usr/local/bin`, and move
-`parallel_raytrace.1` from `man` to `/usr/share/man/man1`.
-To uninstall, just delete these two files.
+If you decide you can't live without the program and want to install it properly
+on your machine, move `parallel_raytrace` from `bin` to `/usr/local/bin`, and
+move `parallel_raytrace.1` from `man` to `/usr/share/man/man1`.
+To uninstall, just delete these two files from those locations.
 
 This program was written for the Individual Project component of my Music Tech
 BA at Huddersfield University.
